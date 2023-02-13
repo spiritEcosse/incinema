@@ -1,0 +1,11 @@
+**/__pycache__/**
+*.pyc
+.idea
+*.json
+.DS_Store
+*.zip
+*.ttf
+fall/
+bunny/
+static/
+.pytest_cache
