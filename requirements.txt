@@ -1,4 +1,4 @@
-mashumaro==3.3.1
+mashumaro==3.5
 pytest==7.2.1
 ujson==5.7.0
 Cython --install-option="--no-cython-compile"

@@ -1,7 +1,7 @@
 from dataclasses import fields
 from typing import TypeVar, Type
 
-from mashumaro.serializer.json import DataClassJSONMixin
+from mashumaro.mixins.json import DataClassJSONMixin
 
 T = TypeVar("T", bound="DataClassJSONSerializer")
 

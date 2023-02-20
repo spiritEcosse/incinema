@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+    incinema
+    
+    SAM Template for incinema
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+    Function:
+        Timeout: 360
+        MemorySize: 128
+        Tracing: Active
+    Api:
+        TracingEnabled: true
+
+Parameters:
+
+  StateMachineArn:
+    Type: String
+    Description: Arn of step function to run distributed tasks.
+
+  HostApiUrl:
+    Type: String
+    Description: Url to get meta data of items.
+
+  HostApiToken:
+    Type: String
+    Description: Token that url.
+
+
+Resources:
+    IncinemaFunction:
+        Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+        Properties:
+            CodeUri: .
+            Handler: main.handler
+            Runtime: python3.9
+            Architectures:
+                - x86_64
+            Events:
+                Bot:
+                    Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+                    Properties:
+                        Path: /bot
+                        Method: get
+            Environment:
+                Variables:
+                    STATE_MACHINE_ARN: !Ref StateMachineArn
+                    HOST_API_URL: !Ref HostApiUrl
+                    HOST_API_TOKEN: !Ref HostApiToken
+
+    ApplicationResourceGroup:
+        Type: AWS::ResourceGroups::Group
+        Properties:
+            Name:
+                Fn::Join:
+                    - ''
+                    - - ApplicationInsights-SAM-
+                      - Ref: AWS::StackName
+            ResourceQuery:
+                Type: CLOUDFORMATION_STACK_1_0
+    ApplicationInsightsMonitoring:
+        Type: AWS::ApplicationInsights::Application
+        Properties:
+            ResourceGroupName:
+                Fn::Join:
+                    - ''
+                    - - ApplicationInsights-SAM-
+                      - Ref: AWS::StackName
+            AutoConfigurationEnabled: 'true'
+        DependsOn: ApplicationResourceGroup
+Outputs:
+    # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+    # Find out more about other implicit resources you can reference within SAM
+    # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+    IncinemaApi:
+        Description: API Gateway endpoint URL for Prod stage for Incinema function
+        Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/bot/"
+    IncinemaFunction:
+        Description: Incinema Lambda Function ARN
+        Value: !GetAtt IncinemaFunction.Arn
+    IncinemaFunctionIamRole:
+        Description: Implicit IAM Role created for Incinema function
+        Value: !GetAtt IncinemaFunctionRole.Arn

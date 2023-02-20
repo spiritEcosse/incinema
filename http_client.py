@@ -6,8 +6,7 @@ import aiohttp
 import async_timeout
 
 from serializer import DataClassJSONSerializer
-from secretsmanager import _get_secret
-from settings import SECRET_ARN, HOST_API_URL, HOST_API_TOKEN
+from settings import HOST_API_URL, HOST_API_TOKEN
 
 
 @dataclass

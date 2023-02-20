@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, call
 from asynctest import TestCase, MagicMock, patch
 
 from main import handler
-from settings import STATE_MACHINE_ARN, HOST_API_TOKEN, HOST_API_URL
+from settings import STATE_MACHINE_ARN, HOST_API_TOKEN, HOST_API_URL, AWS_DEFAULT_REGION
 
 
 @patch('boto3.client')
@@ -188,7 +188,7 @@ class TestHandler(TestCase):
 
         self.assertListEqual(aioboto.mock_calls, [
             call(),
-            call().resource('dynamodb'),
+            call().resource('dynamodb', region_name=AWS_DEFAULT_REGION),
             call().resource().__aenter__(),
             call().resource().__aenter__().batch_get_item(
                 RequestItems={'item': {
@@ -198,7 +198,7 @@ class TestHandler(TestCase):
                 }),
             call().resource().__aexit__(None, None, None),
             call(),
-            call().resource('dynamodb'),
+            call().resource('dynamodb', region_name=AWS_DEFAULT_REGION),
             call().resource().__aenter__(),
             call().resource().__aenter__().Table('item'),
             call().resource().__aexit__(None, None, None)
