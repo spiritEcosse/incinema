@@ -49,6 +49,7 @@ jobs:
                   echo 'Running unit tests'
                   pip3 install -r requirements.txt
                   pytest --doctest-modules  -k "not test_real_data"
+                  export STATE_MACHINE_ARN=${{ secrets.STATE_MACHINE_ARN }}
                   echo 'Running integration tests'
                   pytest -c NUL -k "tests.test_real_data"
 
