@@ -49,9 +49,6 @@ jobs:
                   echo 'Running unit tests'
                   pip3 install -r requirements.txt
                   pytest --doctest-modules  -k "not test_real_data"
-                  export STATE_MACHINE_ARN=${{ secrets.STATE_MACHINE_ARN }}
-                  echo 'Running integration tests'
-                  pytest -c NUL tests/test_real_data.py
 
     delete-feature:
         if: startsWith(github.event.ref, 'feature') && github.event_name == 'delete'
@@ -224,7 +221,12 @@ jobs:
         steps:
             - uses: actions/checkout@v3
             - run: |
-                  # trigger the integration tests here
+                  export AWS_ACCESS_KEY_ID=${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
+                  export AWS_SECRET_ACCESS_KEY=${{ env.PIPELINE_USER_SECRET_ACCESS_KEY }}
+                  export AWS_DEFAULT_REGION=${{ env.TESTING_REGION }}
+                  export STATE_MACHINE_ARN=${{ secrets.STATE_MACHINE_ARN }}
+                  echo 'Running integration tests'
+                  pytest -c NUL tests/test_real_data.py
 
     deploy-prod:
         if: github.ref == 'refs/heads/main'
