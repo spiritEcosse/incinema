@@ -51,7 +51,7 @@ jobs:
                   pytest --doctest-modules  -k "not test_real_data"
                   export STATE_MACHINE_ARN=${{ secrets.STATE_MACHINE_ARN }}
                   echo 'Running integration tests'
-                  pytest -c NUL -k "tests.test_real_data"
+                  pytest -c NUL tests/test_real_data.py
 
     delete-feature:
         if: startsWith(github.event.ref, 'feature') && github.event_name == 'delete'
