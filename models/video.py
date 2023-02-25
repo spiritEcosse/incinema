@@ -1,11 +1,10 @@
+from _decimal import Decimal
 from dataclasses import dataclass
 from typing import List
 
 import aioboto3
-from _decimal import Decimal
 
 from serializer import DataClassJSONSerializer
-from settings import AWS_DEFAULT_REGION
 
 
 @dataclass
@@ -84,7 +83,7 @@ class Item(DataClassJSONSerializer):
     @classmethod
     async def save(cls, items: List):
         session = aioboto3.Session()
-        async with session.resource('dynamodb', region_name=AWS_DEFAULT_REGION) as dynamo_resource:
+        async with session.resource('dynamodb') as dynamo_resource:
             table = await dynamo_resource.Table(cls.table())
 
             async with table.batch_writer() as batch:
@@ -92,9 +91,26 @@ class Item(DataClassJSONSerializer):
                     await batch.put_item(Item=item.to_dict())
 
     @classmethod
+    async def delete_all_items(cls) -> None:
+        """
+        Deletes all items from a DynamoDB table using batch writes.
+
+        :raises botocore.exceptions.ClientError: If any error occurs while deleting items.
+        :return: None
+        """
+        session = aioboto3.Session()
+        async with session.resource('dynamodb') as dynamo_resource:
+            table = await dynamo_resource.Table(cls.table())
+            scan = await table.scan()
+            async with table.batch_writer() as batch:
+                # Delete each item in a batch
+                for each in scan['Items']:
+                    await batch.delete_item(Key={"id": each['id']})
+
+    @classmethod
     async def batch_get_item(cls, ids: List):
         session = aioboto3.Session()
-        async with session.resource('dynamodb', region_name=AWS_DEFAULT_REGION) as dynamo_resource:
+        async with session.resource('dynamodb') as dynamo_resource:
             return await dynamo_resource.batch_get_item(RequestItems={
                 cls.table():  {
                     "Keys": ids,
