@@ -48,7 +48,9 @@ jobs:
                   export AWS_DEFAULT_REGION=${{ env.TESTING_REGION }}
                   echo 'Running unit tests'
                   pip3 install -r requirements.txt
-                  pytest --doctest-modules
+                  pytest --doctest-modules  -k "not test_real_data"
+                  echo 'Running integration tests'
+                  pytest -c NUL -k "tests.test_real_data"
 
     delete-feature:
         if: startsWith(github.event.ref, 'feature') && github.event_name == 'delete'
