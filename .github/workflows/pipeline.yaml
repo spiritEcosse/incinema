@@ -43,9 +43,12 @@ jobs:
         steps:
             - uses: actions/checkout@v3
             - run: |
+                  export AWS_ACCESS_KEY_ID=${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
+                  export AWS_SECRET_ACCESS_KEY=${{ env.PIPELINE_USER_SECRET_ACCESS_KEY }}
+                  export AWS_DEFAULT_REGION=${{ env.TESTING_REGION }}
                   echo 'Running unit tests'
                   pip3 install -r requirements.txt
-                  python3 -m pytest
+                  make tests
 
     delete-feature:
         if: startsWith(github.event.ref, 'feature') && github.event_name == 'delete'
