@@ -43,10 +43,10 @@ jobs:
         steps:
             - uses: actions/checkout@v3
             - run: |
+                  echo 'Running unit tests'
                   export AWS_ACCESS_KEY_ID=${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
                   export AWS_SECRET_ACCESS_KEY=${{ env.PIPELINE_USER_SECRET_ACCESS_KEY }}
                   export AWS_DEFAULT_REGION=${{ env.TESTING_REGION }}
-                  echo 'Running unit tests'
                   pip3 install -r requirements.txt
                   pytest --doctest-modules  -k "not test_real_data"
 
