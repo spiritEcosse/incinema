@@ -142,25 +142,25 @@ class VideoEditor:
             resolution_json = json.loads(resolution)
             box = Box(resolution_json)
 
-            if box.streams[0].width != 1920 or box.streams[0].height != 1080:
+            if box.streams[0].width != 1920:
                 [self.do_resolution(file_) for file_ in self.get_original_scenes()]
-            self.re_do_silence = True
+            self.re_concat = True
 
     def do_resolution(self, file_):
         subprocess.run([
-            "ffmpeg", "-y", "-i", file_, "-vf", "scale=1920:1080", "-preset", "slow", "-crf", "18", "-ac", "2", f"{file_}{self.file_resolution}"])
-        subprocess.check_output(f"mv {file_}{self.file_resolution} {file_}", shell=True)
+            "ffmpeg", "-y", "-i", file_, "-vf", "scale=1920:-1", "-preset", "slow", "-crf", "18", "-ac", "2", f"{file_}{self.file_resolution}"])
+        subprocess.check_output(f"mv -f {file_}{self.file_resolution} {file_}", shell=True)
 
-    async def do_silences(self):
-        if not self.re_do_silence:
-            logger.info(f"do_silence: {self.dir}")
-            [self.do_silence(file_) for file_ in self.get_original_scenes()]
-            self.re_concat = True
-
-    def do_silence(self, file_):
-        subprocess.run(['ffmpeg', "-y", '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100', '-i',
-                        file_, '-c:v', 'copy', '-c:a', 'aac', '-shortest', f"{file_}{self.silence}"])
-        subprocess.check_output(f"mv {file_}{self.silence} {file_}", shell=True)
+    # async def do_silences(self):
+    #     if self.re_do_silence:
+    #         logger.info(f"do_silence: {self.dir}")
+    #         [self.do_silence(file_) for file_ in self.get_original_scenes()]
+    #         self.re_concat = True
+    #
+    # def do_silence(self, file_):
+    #     subprocess.run(['ffmpeg', "-y", '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100', '-i',
+    #                     file_, '-c:v', 'copy', '-c:a', 'aac', '-shortest', f"{file_}{self.silence}"])
+    #     subprocess.check_output(f"mv -f {file_}{self.silence} {file_}", shell=True)
 
     async def do_concat(self):
         if not os.path.isfile(self.concat) or self.re_concat:

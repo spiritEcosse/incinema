@@ -94,5 +94,5 @@ class GetMetaData:
 
         subprocess.check_output(f"rm -f {file_concat}", shell=True)
         files_concat = " -cat ".join([f"{file}/video_background_audio.mp4" for file in files])
-        # subprocess.check_output(f"MP4Box -cat {files_concat} -new {file_concat}", shell=True)
-        subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', file_list_concat, "-c", "copy", file_concat])
+        subprocess.check_output(f"MP4Box -cat {files_concat} -new {file_concat}", shell=True)
+        # subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', file_list_concat, "-c", "copy", file_concat])
