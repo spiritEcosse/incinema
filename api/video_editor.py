@@ -33,7 +33,6 @@ class VideoEditor:
         self.item = item
         self.original = "original.mp4"
         self.file_resolution = "_resolution.mp4"
-        self.silence = "silence.mp4"
         self.file_random_scenes = 'scene_random.txt'
         self.concat = "concat.mp4"
         self.list_concat = "list_concat.txt"
@@ -45,7 +44,6 @@ class VideoEditor:
         self.background_audio = os.path.join(BASE_DIR, f"{self.item.background_audio}.mp3")
         self.re_download = False
         self.re_do_resolution = False
-        self.re_do_silence = False
         self.re_do_audio = False
         self.re_random_scenes = False
         self.re_cut_scenes = False
@@ -75,7 +73,6 @@ class VideoEditor:
             await self.random_scenes()
             await self.cut_scenes()
             await self.do_resolutions()
-            await self.do_silences()
             ########################################################################### await self.check_commercial_scene()
             ########################################################################### await self.check_commercial_scene_image()
             await self.do_concat()
@@ -150,17 +147,6 @@ class VideoEditor:
         subprocess.run([
             "ffmpeg", "-y", "-i", file_, "-vf", "scale=1920:-1", "-preset", "slow", "-crf", "18", "-ac", "2", f"{file_}{self.file_resolution}"])
         subprocess.check_output(f"mv -f {file_}{self.file_resolution} {file_}", shell=True)
-
-    # async def do_silences(self):
-    #     if self.re_do_silence:
-    #         logger.info(f"do_silence: {self.dir}")
-    #         [self.do_silence(file_) for file_ in self.get_original_scenes()]
-    #         self.re_concat = True
-    #
-    # def do_silence(self, file_):
-    #     subprocess.run(['ffmpeg', "-y", '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100', '-i',
-    #                     file_, '-c:v', 'copy', '-c:a', 'aac', '-shortest', f"{file_}{self.silence}"])
-    #     subprocess.check_output(f"mv -f {file_}{self.silence} {file_}", shell=True)
 
     async def do_concat(self):
         if not os.path.isfile(self.concat) or self.re_concat:
