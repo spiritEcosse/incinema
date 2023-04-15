@@ -13,15 +13,14 @@ class GetVideoPlayback:
 
     async def run(self):
         http_client = HttpClient.from_dict(
-            {"urls": [f"{self.url}?viconst={item.video.id}" for item in self.items if item.titleType == 'movie']}
+            {"urls": [f"{self.url}?viconst={item.video.id}" for item in self.items]}
         )
         for index, response in enumerate(await http_client.run()):
-            if self.items[index].titleType == 'movie':
-                box = Box(response)
-                for encoding in box.resource.encodings:
-                    if encoding.mimeType in self.formats and encoding.definition in self.qualities:
-                        url = encoding.playUrl
-                        break
-                else:
-                    raise Exception(f"url cannot be find {box}")
-                self.items[index].video.url = url
+            box = Box(response)
+            for encoding in box.resource.encodings:
+                if encoding.mimeType in self.formats and encoding.definition in self.qualities:
+                    url = encoding.playUrl
+                    break
+            else:
+                raise Exception(f"url cannot be find {box}")
+            self.items[index].video.url = url

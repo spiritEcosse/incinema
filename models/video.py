@@ -1,3 +1,4 @@
+import re
 from _decimal import Decimal
 from dataclasses import dataclass
 from typing import List
@@ -5,6 +6,7 @@ from typing import List
 import aioboto3
 
 from serializer import DataClassJSONSerializer
+from settings import AVAILABLE_SYMBOLS
 
 
 @dataclass
@@ -32,15 +34,26 @@ class Video(DataClassJSONSerializer):
 
 
 @dataclass
+class Description(DataClassJSONSerializer):
+    ru: str = ""
+
+
+@dataclass
+class Title(DataClassJSONSerializer):
+    ru: str = ""
+    en: str = ""
+
+
+@dataclass
 class Item(DataClassJSONSerializer):
     """A class representing an item
 
     >>> video = Video('vid1', 'http://example.com/video1.mp4')
-    >>> item = Item('it1', 'Funny Video', "movie", 2020, 120, 4.5, video)
+    >>> item = Item('it1', Title(ru='Funny Video', en="En version"), "movie", 2020, 120, 4.5, Description("Текст"), "background_audio", video)
     >>> item.id
     'it1'
     >>> item.title
-    'Funny Video'
+    Title(ru='Funny Video', en='En version')
     >>> item.titleType
     'movie'
     >>> item.year
@@ -49,32 +62,43 @@ class Item(DataClassJSONSerializer):
     120
     >>> item.rating
     4.5
+    >>> item.description
+    Description(ru='Текст')
+    >>> item.background_audio
+    'background_audio'
     >>> item.video
     Video(id='vid1', url='http://example.com/video1.mp4')
+    >>> item.description
+    Description(ru='Текст')
     """
 
     id: str
-    title: str
+    title: Title
     titleType: str
     year: int
     duration: int
     rating: Decimal
+    description: Description
+    background_audio: str
     video: Video = None
 
     def to_string(self):
         """
-        >>> Item(
-        ...    id="tt4154756", title='Avengers: Infinity War', titleType="movie", year=2018, duration=149, rating=8.4,
+        >>> output = Item(
+        ...    id="tt4154756", title=Title(en='Avengers: Infinity War', ru="Ru version"), titleType="movie", year=2018, duration=149, rating=8.4,
+        ...    description=Description(ru="Текст"),
+        ...    background_audio="background_audio",
         ...    video=Video(id="vi2335949337", url='https://url')
         ... ).to_string()
-        Назва\: Avengers: Infinity War
-        Рік\: 2018
-        Тривалість\: 149 хв
+        >>> print(output)
+        Название\: Ru version/Avengers: Infinity War
+        Год\: 2018
+        Продолжительность\: 149 мин
         Рейтинг IMDB\: 8.4/10
 
         :return: str
         """
-        print(f"Назва\: {self.title}\nРік\: {self.year}\nТривалість\: {self.duration} хв\nРейтинг IMDB\: {self.rating}/10")
+        return f"Название\: {self.title.ru}/{self.title.en}\nГод\: {self.year}\nПродолжительность\: {self.duration} мин\nРейтинг IMDB\: {self.rating}/10"
 
     @classmethod
     def table(cls):
@@ -109,11 +133,24 @@ class Item(DataClassJSONSerializer):
 
     @classmethod
     async def batch_get_item(cls, ids: List):
+        if not ids:
+            return []
+
         session = aioboto3.Session()
         async with session.resource('dynamodb') as dynamo_resource:
             return await dynamo_resource.batch_get_item(RequestItems={
                 cls.table():  {
-                    "Keys": ids,
-                    "ProjectionExpression": "id"
+                    "Keys": ids
                 }
             })
+
+    @property
+    def title_to_dir(self):
+        """
+        >>> item = Item(id="tt4154756", title=Title(en='Avengers: -_*.Infinity War', ru="Ru version"), titleType="movie", year=2018, duration=149, rating=8.4, description=Description(ru="Текст"), background_audio="background_audio", video=Video(id="vi2335949337", url='https://url'))
+        >>> item.title_to_dir
+        'avengers_infinity_war'
+
+        :return:
+        """
+        return re.sub('_+', '_', re.sub(AVAILABLE_SYMBOLS, '', self.title.en.lower().replace(" ", "_")))

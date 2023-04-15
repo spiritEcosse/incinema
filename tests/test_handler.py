@@ -1,11 +1,20 @@
+import os
+from pathlib import Path
 from unittest.mock import AsyncMock, call
 
 from asynctest import TestCase, MagicMock, patch
 
 from main import handler
-from settings import STATE_MACHINE_ARN, HOST_API_TOKEN, HOST_API_URL
+from settings import HOST_API_TOKEN, HOST_API_URL, BUCKET_VIDEO
+from unittest.mock import patch, mock_open
+
+opener = mock_open()
 
 
+@patch('api.video_editor.glob')
+@patch('api.video_editor.AudioAPI')
+@patch('api.get_meta_data.Pool')
+@patch('api.get_meta_data.subprocess')
 @patch('boto3.client')
 @patch('aioboto3.Session')
 @patch('aiohttp.ClientSession')
@@ -16,14 +25,20 @@ class TestHandler(TestCase):
         self.item_id_1 = "tt4154756"
         self.item_id_2 = "tt0050825"
         self.item_id_3 = "tt15325794"
+        self.title_3 = "Fall_test"
         self.item_id_4 = "tt1668746"
-        self.string = f"Suspense, Survey .1.\n1.Вышка | {self.item_id_1} \n2.Джунгли | {self.item_id_2} \n3.Новое | {self.item_id_3}\n4.The Kingsroad | {self.item_id_4}\n"
-
-    def test_success(self, *args):
-        client_session, aioboto, boto = args
+        self.string = f"Suspense, Survey .1.#1.Вышка | {self.item_id_1} | background_audio | Text#2.Джунгли | {self.item_id_2} | background_audio | Text#3.Новое | {self.item_id_3} | background_audio | Text#4.The Kingsroad | {self.item_id_4} | background_audio | Text"
         self.video_id_1 = "vi2335949337"
         self.video_id_2 = "vi2335949338"
+        self.video_id_3 = "vi2335949334"
+        self.url_3 = f"https://www.imdb.com/video/{self.video_id_3}"
 
+    def mocked_open(self, *args, **kwargs):
+        return opener(self, *args, **kwargs)
+
+    def test_success(self, *args):
+        os.environ["DETECT_SCENES"] = "True"
+        client_session, aioboto, boto, subprocess, Pool, glob, AudioAPI = args
         json_get_meta_data = {
             self.item_id_1: {
                 "title":
@@ -120,7 +135,13 @@ class TestHandler(TestCase):
         client_session.return_value = MagicMock(
             **{"__aenter__.return_value.get.return_value":
                 MagicMock(**{"__aenter__.return_value.json.side_effect": AsyncMock(
-                    side_effect=[json_get_meta_data, json_get_videos, json_get_videos_2, json_get_playback, json_get_playback_2]
+                    side_effect=[
+                        json_get_meta_data,
+                        json_get_videos,
+                        json_get_videos_2,
+                        json_get_playback,
+                        json_get_playback_2
+                    ]
                 )})
             }
         )
@@ -133,17 +154,41 @@ class TestHandler(TestCase):
             )}
         )
         aioboto.return_value = MagicMock(
+            **{"client.return_value": AsyncMock(
+
+            )},
             **{"resource.return_value": MagicMock(
                 **{"__aenter__.return_value": MagicMock(**{"Table.side_effect": AsyncMock(
                     side_effect=[table]
                 )}, **{"batch_get_item.side_effect": AsyncMock(
-                    side_effect=[{'Responses': {'item': [{'id': self.item_id_3}]}}, None]
+                    side_effect=[{'Responses': {'item': [
+                        {
+                            'id': self.item_id_3,
+                            "title": {
+                                "ru": self.title_3,
+                                "en": "En version",
+                            },
+                            "background_audio": "background_audio",
+                            "titleType": "movie",
+                            "year": 2016,
+                            "duration": 180,
+                            "rating": 5.6,
+                            "description": {
+                                "ru": "Текст"
+                            },
+                            "video": {
+                                "id": self.video_id_3,
+                                "url": self.url_3
+                            }
+                        }
+                    ]}}, None]
                 )}
                 )}
             )}
         )
 
-        handler({"body": self.string}, {})
+        with patch.object(Path, 'open', opener):
+            handler({"body": self.string}, {})
 
         self.assertListEqual(client_session.mock_calls, [
             call(f'https://{HOST_API_URL}', headers={
@@ -194,7 +239,7 @@ class TestHandler(TestCase):
                 RequestItems={'item': {
                     'Keys': [
                         {'id': self.item_id_1}, {'id': self.item_id_2}, {"id": self.item_id_3}, {'id': self.item_id_4}
-                    ], "ProjectionExpression": "id"}
+                    ]}
                 }),
             call().resource().__aexit__(None, None, None),
             call(),
@@ -208,23 +253,11 @@ class TestHandler(TestCase):
                 call.batch_writer(),
                 call.batch_writer().__aenter__(),
                 call.batch_writer().__aenter__().put_item(
-                    Item={'id': self.item_id_1, 'title': 'Avengers: Infinity War', 'titleType': 'movie', 'year': 2018, 'duration': 149,
-                          'rating': '8.4', 'video': {'id': 'vi2335949337', 'url': 'https://url'}}),
+                    Item={'id': self.item_id_1, 'title': {"ru": "Вышка", "en": 'Avengers: Infinity War'}, 'titleType': 'movie', 'background_audio': 'background_audio', 'year': 2018, 'duration': 149,
+                          'rating': '8.4', 'description': {"ru": "Text"}, 'video': {'id': 'vi2335949337', 'url': 'https://url'}}),
                 call.batch_writer().__aenter__().put_item(
-                    Item={'id': self.item_id_2, 'title': 'Avengers: Infinity War 2', 'titleType': 'movie', 'year': 2019, 'duration': 169,
-                          'rating': '9.4', 'video': {'id': 'vi2335949338', 'url': 'https://url'}}),
-                call.batch_writer().__aenter__().put_item(
-                    Item={'id': self.item_id_4, 'title': 'The Kingsroad', 'titleType': 'tvEpisode', 'year': 2011,
-                          'duration': 56, 'rating': '9.4', 'video': None}),
+                    Item={'id': self.item_id_2, 'title': {"ru": "Джунгли", "en": 'Avengers: Infinity War 2'}, 'titleType': 'movie', 'background_audio': 'background_audio', 'year': 2019, 'duration': 169,
+                          'rating': '9.4', 'description': {"ru": "Text"}, 'video': {'id': 'vi2335949338', 'url': 'https://url'}}),
                 call.batch_writer().__aexit__(None, None, None)
-            ]
-        )
-
-        self.assertListEqual(
-            boto.mock_calls, [
-                call('stepfunctions'),
-                call().start_execution(stateMachineArn=STATE_MACHINE_ARN, input='{"id": "tt4154756"}'),
-                call().start_execution(stateMachineArn=STATE_MACHINE_ARN, input='{"id": "tt0050825"}'),
-                call().start_execution(stateMachineArn=STATE_MACHINE_ARN, input='{"id": "tt1668746"}')
             ]
         )

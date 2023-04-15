@@ -13,12 +13,11 @@ class GetVideos:
 
     async def run(self):
         http_client = HttpClient.from_dict(
-            {"urls": [f"{self.url}?tconst={item.id}" for item in self.items if item.titleType == 'movie']}
+            {"urls": [f"{self.url}?tconst={item.id}" for item in self.items]}
         )
         responses = await http_client.run()
         for index, response in enumerate(responses):
-            if self.items[index].titleType == 'movie':
-                box = Box(response)
-                self.items[index].video = Video(id=box.resource.videos[0].id.split('/')[-1])
+            box = Box(response)
+            self.items[index].video = Video(id=box.resource.videos[0].id.split('/')[-1])
 
         await GetVideoPlayback(items=self.items).run()

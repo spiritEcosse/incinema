@@ -62,13 +62,13 @@ class HttpClient(DataClassJSONSerializer):
 
         return await response.json()
 
-    async def get_response(self, url, session):
-        await asyncio.sleep(0.2)
+    async def get_response(self, index, url, session):
+        await asyncio.sleep(0.3 * index)
         async with async_timeout.timeout(5000):
             async with session.get(url) as response:
                 return await self.request(url, response)
 
     async def gather_tasks(self):
         async with aiohttp.ClientSession(self.server_name, headers=self._header) as session:
-            tasks = (self.get_response(url, session) for url in self.urls)
+            tasks = (self.get_response(index, url, session) for index, url in enumerate(self.urls, start=1))
             return await asyncio.gather(*tasks)
