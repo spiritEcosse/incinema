@@ -17,7 +17,7 @@ class RandomScenes:
         >>> rs.scenes()
         [('0:00:00', '0:00:01'), ('0:00:01', '0:00:01'), ('0:00:02', '0:00:01'), ('0:00:03', '0:00:01'), ('0:00:04', '0:00:01'), ('0:00:05', '0:00:01'), ('0:00:06', '0:00:01'), ('0:00:07', '0:00:01'), ('0:00:08', '0:00:01'), ('0:00:09', '0:00:01')]
         """
-        return [(f"{timedelta(seconds=sec)}", "0:00:01") for sec in range(int(self.duration))]
+        return [(f"{timedelta(seconds=sec)}", "0:00:01") for sec in range(int(self.duration))[:60*50]]
 
     def run(self):
         scenes = self.scenes()

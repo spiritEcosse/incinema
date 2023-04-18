@@ -19,8 +19,5 @@ class GetVideoPlayback:
             box = Box(response)
             for encoding in box.resource.encodings:
                 if encoding.mimeType in self.formats and encoding.definition in self.qualities:
-                    url = encoding.playUrl
+                    self.items[index].video.url = encoding.playUrl
                     break
-            else:
-                raise Exception(f"url cannot be find {box}")
-            self.items[index].video.url = url

@@ -74,25 +74,38 @@ class GetMetaData:
         with Pool(10) as p:
             print(p.map(video_editor, [item for item in self.items]))
 
-    async def do_set(self):
-        logger.info(f"do_set : data1")
-
-        files = [os.path.join(BASE_DIR, item.title_to_dir) for item in self.items]
-        file_list_concat = os.path.join(BASE_DIR, "sets", "data1.txt")
+    def write_description(self):
         file_list_descriptions = os.path.join(BASE_DIR, "sets", "data1_descriptions.txt")
-        file_concat = os.path.join(BASE_DIR, "sets", "data1.mp4")
-
-        Path(os.path.join(BASE_DIR, "sets")).mkdir(exist_ok=True)
-        if not os.path.isfile(file_list_concat):
-            with open(file_list_concat, 'w') as f:
-                for file_ in files:
-                    f.write(f"file '{file_}/video_background_audio.mp4'\n")
-
         with open(file_list_descriptions, 'w') as f:
             for item in self.items:
                 f.write(f"{item.to_string()}\n\n")
 
+    async def do_set(self):
+        file_name = "data1"
+        Path(os.path.join(BASE_DIR, "sets")).mkdir(exist_ok=True)
+        logger.info(f"do_set : {file_name}")
+        self.write_description()
+
+        files = [(os.path.join(BASE_DIR, item.title_to_dir), item.title_to_dir) for item in self.items]
+        file_list_concat = os.path.join(BASE_DIR, "sets", f"{file_name}.txt")
+        file_concat = os.path.join(BASE_DIR, "sets", f"{file_name}.mp4")
+        data = []
+
+        if not files:
+            raise Exception("files is empty.")
+        # data.append(f"{os.path.join(BASE_DIR, 'sets')}/silence-1.mp4")
+        Path(os.path.join(BASE_DIR, "sets")).mkdir(exist_ok=True)
+        with open(file_list_concat, 'w') as f:
+            for index, folder_data in enumerate(files, 1):
+                full_path, folder_name = folder_data[0], folder_data[1]
+                # data.append(f"{os.path.join(BASE_DIR, 'sets')}/silence-{index}.mp4")
+                data.append(f"{full_path}/video_background_audio.mp4")
+                # f.write(f"file '{os.path.join(BASE_DIR, 'sets')}/{index}.mp4'\n")
+                f.write(f"file '{full_path}/video_background_audio.mp4'\n")
+                subprocess.check_output(f"cp -f {full_path}/video_background_audio.mp4 {os.path.join(BASE_DIR, 'sets', f'{folder_name}.mp4')}", shell=True)
+
         subprocess.check_output(f"rm -f {file_concat}", shell=True)
-        files_concat = " -cat ".join([f"{file}/video_background_audio.mp4" for file in files])
-        subprocess.check_output(f"MP4Box -cat {files_concat} -new {file_concat}", shell=True)
-        # subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', file_list_concat, "-c", "copy", file_concat])
+        if data:
+            files_concat = " -cat ".join(data)
+            subprocess.check_output(f"MP4Box -cat {files_concat} -new {file_concat}", shell=True)
+            # subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', file_list_concat, "-c", "copy", file_concat])

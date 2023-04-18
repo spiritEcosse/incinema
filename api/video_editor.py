@@ -5,19 +5,18 @@ import logging
 import os
 import re
 import subprocess
-from multiprocessing import Pool
+import sys
+from time import sleep
 
-import requests
+from pyYify import yify
 from itertools import cycle
 from box import Box
-from requests.utils import requote_uri
 
 from pathlib import Path
 
 import aioboto3
 
 from api.random_scenes import RandomScenes
-from http_client import HttpClient
 from models.video import Item, Description, Title
 from narakeet_api import AudioAPI, show_progress
 from settings import BASE_DIR, BUCKET_VIDEO, VOICE_API
@@ -29,7 +28,7 @@ logger.setLevel(logging.INFO)
 
 class VideoEditor:
     def __init__(self, item: Item):
-        self.font_path = "/static/OpenSans/OpenSans-Regular.ttf"
+        self.font_path = "static/Mulish-Black.ttf"
         self.item = item
         self.original = "original.mp4"
         self.file_resolution = "_resolution.mp4"
@@ -54,7 +53,7 @@ class VideoEditor:
         self.re_add_audio = False
         self.re_add_background_audio = False
         self.re_upload_all_files = False
-        self.font_size = 24
+        self.font_size = 35
         self.font_color = 'white'
         self.position_x = 20
         self.position_y = 'h-text_h-20'
@@ -73,21 +72,47 @@ class VideoEditor:
             await self.random_scenes()
             await self.cut_scenes()
             await self.do_resolutions()
-            ########################################################################### await self.check_commercial_scene()
-            ########################################################################### await self.check_commercial_scene_image()
+            # ########################################################################### await self.check_commercial_scene()
+            # ########################################################################### await self.check_commercial_scene_image()
             await self.do_concat()
             await self.do_caption()
             await self.add_audio()
             await self.add_background_audio()
-            ########################################################################### await self.upload_all_files()
+            # await self.upload_all_files()
         except Exception as e:
             logger.info(self.item)
             raise e
 
     async def download(self):
+        quality = "1080p"
         if not os.path.isfile(self.original) or self.re_download:
-            logger.info(f"download : {self.item.video.url}")
-            subprocess.run(["curl", "-o", self.original, self.item.video.url])
+            logger.info(f"download : {self.dir}")
+
+            if self.item.video.url:
+                subprocess.run(["curl", "-o", self.original, self.item.video.url])
+            else:
+                movie_first = yify.search_movies(search_string=self.item.id, quality=quality)[0]
+                selected_torrent = None
+                for torrent in movie_first.torrents:
+                    if torrent.quality == quality:
+                        selected_torrent = torrent
+                        subprocess.check_output(
+                            f"/Users/ihor/.pyenv/shims/deluge-console add --path {self.abs_path} '{torrent.magnet}'", shell=True)
+                        break
+                else:
+                    raise Exception("Doesn't exist magnet link.")
+
+                if selected_torrent:
+                    while True:
+                        result = str(subprocess.check_output(
+                            f"/Users/ihor/.pyenv/shims/deluge-console info {selected_torrent.hash.lower()}", shell=True))
+                        if "100%" in result:
+                            raw_original = subprocess.check_output(f"find `pwd` -maxdepth 1 -type d -name '*{self.item.year}*' -print", shell=True).decode(sys.stdout.encoding).strip()
+                            original = re.escape(raw_original)
+                            subprocess.check_output(f"mv {original}/*.mp4 {self.original}", shell=True)
+                            break
+                        sleep(2)
+
             self.re_random_scenes = True
 
     async def do_audio(self):
@@ -156,6 +181,8 @@ class VideoEditor:
             filtered_files = self.filter_scenes_by_duration_audio(scenes)
 
             with open(self.list_concat, 'w') as f:
+                # f.write(f"file '{os.path.join(BASE_DIR, 'sets')}/silence-1.mp4'\n")
+
                 for duration, file_name in filtered_files:
                     f.write("file '{}'\n".format(os.path.join(self.abs_path, file_name)))
             subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', self.list_concat, '-c', 'copy', self.concat])
@@ -174,11 +201,11 @@ class VideoEditor:
             self.re_add_background_audio = True
 
     async def add_background_audio(self):
-        if (not os.path.isfile(self.video_background_audio) or self.re_add_background_audio) and os.path.isfile(self.background_audio):
+        if (not os.path.isfile(self.video_background_audio) or self.re_add_background_audio) and os.path.isfile(self.background_audio) and os.path.isfile(self.video_audio):
             logger.info(f"add_background_audio: {self.dir}")
             subprocess.check_output(f"ffmpeg -y -i {self.background_audio} -to {self.audio_duration} {self.item_background_audio}", shell=True)
             subprocess.check_output(f'ffmpeg -y -i {self.video_audio} -i {self.item_background_audio} -c:v copy -filter_complex "[0:a][1:a] amix=inputs=2:duration=longest [audio_out]" -c:a aac -map 0:v -map "[audio_out]" {self.video_background_audio}', shell=True)
-            # self.re_upload_all_files = True
+            self.re_upload_all_files = True
 
     async def upload_all_files(self):
         if self.re_upload_all_files:

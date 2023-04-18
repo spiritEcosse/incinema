@@ -18,7 +18,7 @@ class TestDataReal(TestCase):
         # for i, item in enumerate(data.split('#')):
         #     if i == 0:
         #         self.string = item
-        #     if i == 8:
+        #     if i == 7:
         #         self.string += f"#{item}"
 
     # def test_real_data(self, *args):
