@@ -71,7 +71,6 @@ class VideoEditor:
             await self.do_audio()
             await self.random_scenes()
             await self.cut_scenes()
-            await self.do_resolutions()
             # ########################################################################### await self.check_commercial_scene()
             # ########################################################################### await self.check_commercial_scene_image()
             await self.do_concat()
@@ -80,7 +79,7 @@ class VideoEditor:
             await self.add_background_audio()
             # await self.upload_all_files()
         except Exception as e:
-            logger.info(self.item)
+            logger.error(f"item: {self.item}")
             raise e
 
     async def download(self):
@@ -116,7 +115,7 @@ class VideoEditor:
             self.re_random_scenes = True
 
     async def do_audio(self):
-        if not os.path.isfile(self.audio) or self.re_do_audio:
+        if (not os.path.isfile(self.audio) or self.re_do_audio) and self.item.description.ru != "Dummy":
             logger.info(f"do_audio: {self.dir}")
             api = AudioAPI(VOICE_API)
 
@@ -134,9 +133,10 @@ class VideoEditor:
                 raise Exception(task_result['message'])
             self.re_add_audio = True
 
-        logger.info(f"audio_duration: {self.dir}")
-        audio_duration = await self.get_duration_of_file(self.audio)
-        self.audio_duration = audio_duration[0]
+        if os.path.isfile(self.audio):
+            logger.info(f"audio_duration: {self.dir}")
+            audio_duration = await self.get_duration_of_file(self.audio)
+            self.audio_duration = audio_duration[0]
 
     async def random_scenes(self):
         # logger.warning(f"random_scenes : exists file_detect_scenes: {os.path.isfile(self.file_detect_scenes)}")
@@ -155,23 +155,23 @@ class VideoEditor:
             subprocess.check_output("rm -fr original-*", shell=True)
             # subprocess.run(["rm", "-f", '{}-*'.format(self.silence.split('.')[0])])
             subprocess.run([os.path.join(BASE_DIR, 'scene_cut.sh'), '-i', self.original, '-c', self.file_random_scenes])
-            self.re_do_resolution = True
-
-    async def do_resolutions(self):
-        if self.re_do_resolution:
-            logger.info(f"do_resolutions: {self.dir}")
-            resolution = subprocess.check_output(f"ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of json {self.original}", shell=True)
-            resolution_json = json.loads(resolution)
-            box = Box(resolution_json)
-
-            if box.streams[0].width != 1920:
-                [self.do_resolution(file_) for file_ in self.get_original_scenes()]
             self.re_concat = True
 
-    def do_resolution(self, file_):
-        subprocess.run([
-            "ffmpeg", "-y", "-i", file_, "-vf", "scale=1920:-1", "-preset", "slow", "-crf", "18", "-ac", "2", f"{file_}{self.file_resolution}"])
-        subprocess.check_output(f"mv -f {file_}{self.file_resolution} {file_}", shell=True)
+    # async def do_resolutions(self):
+    #     if self.re_do_resolution:
+    #         logger.info(f"do_resolutions: {self.dir}")
+    #         resolution = subprocess.check_output(f"ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of json {self.original}", shell=True)
+    #         resolution_json = json.loads(resolution)
+    #         box = Box(resolution_json)
+    #
+    #         if box.streams[0].width != 1920:
+    #             [self.do_resolution(file_) for file_ in self.get_original_scenes()]
+    #         self.re_concat = True
+
+    # def do_resolution(self, file_):
+    #     subprocess.run([
+    #         "ffmpeg", "-y", "-i", file_, "-vf", "scale=1920:-1", "-preset", "slow", "-crf", "18", "-ac", "2", f"{file_}{self.file_resolution}"])
+    #     subprocess.check_output(f"mv -f {file_}{self.file_resolution} {file_}", shell=True)
 
     async def do_concat(self):
         if not os.path.isfile(self.concat) or self.re_concat:

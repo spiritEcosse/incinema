@@ -84,7 +84,7 @@ class ParseInitialData(DataClassJSONSerializer):
         InitialData(items=[InitItem(id='tt1233334', title='Вышка', description='Fall Description', background_audio='background_audio'), InitItem(id='tt1233332', title='Джунгли', description='Jungle Description', background_audio='background_audio')], title='Suspense, Survey .1.')
         """
 
-        string = self.string.split("#")
+        string = self.string
         items = []
 
         for item in string[1:]:

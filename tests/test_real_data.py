@@ -11,7 +11,7 @@ class TestDataReal(TestCase):
     maxDiff = None
 
     def setUp(self, *args, **kwargs) -> None:
-        with open(os.path.join(BASE_DIR, "data1.csv")) as file_:
+        with open(os.path.join(BASE_DIR, "data3.csv")) as file_:
             data = file_.read()
 
         self.string = data

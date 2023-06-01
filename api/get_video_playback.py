@@ -5,7 +5,7 @@ from http_client import HttpClient
 
 class GetVideoPlayback:
     url = "/title/get-video-playback"
-    qualities = ['1080p', '720p']
+    qualities = ['1080p']
     formats = ['video/mp4']
 
     def __init__(self, items):

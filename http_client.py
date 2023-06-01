@@ -4,6 +4,7 @@ from typing import Any
 
 import aiohttp
 import async_timeout
+from aiohttp import ClientTimeout
 
 from serializer import DataClassJSONSerializer
 from settings import HOST_API_URL, HOST_API_TOKEN
@@ -36,7 +37,7 @@ class HttpClient(DataClassJSONSerializer):
         >>> http_client.server_name
         'https://example.com/3'
         """
-        return f"https://{self.server}"
+        return f"https://{self.server}" if '127.0.0.1' not in self.server else f"http://{self.server}"
 
     @property
     def _header(self, *args, **kwargs) -> dict:
@@ -58,17 +59,18 @@ class HttpClient(DataClassJSONSerializer):
 
     async def request(self, url, response) -> Any:
         """A coroutine to request a http_client"""
-        # raise Exception(inspect.isawaitable(response.json()))
+        if response.status == 401:
+            return url, response.status, await response.text()
+        if response.status < 500:
+            return url, response.status, ""
+        return url, response.status, await response.text()
 
-        return await response.json()
-
-    async def get_response(self, index, url, session):
-        await asyncio.sleep(0.3 * index)
-        async with async_timeout.timeout(5000):
+    async def get_response(self, url, session):
+        async with async_timeout.timeout(1500):
             async with session.get(url) as response:
                 return await self.request(url, response)
 
     async def gather_tasks(self):
-        async with aiohttp.ClientSession(self.server_name, headers=self._header) as session:
-            tasks = (self.get_response(index, url, session) for index, url in enumerate(self.urls, start=1))
+        async with aiohttp.ClientSession(self.server_name, headers=self._header, timeout=ClientTimeout(10 * 60)) as session:
+            tasks = (self.get_response(url, session) for index, url in enumerate(self.urls, start=1))
             return await asyncio.gather(*tasks)
