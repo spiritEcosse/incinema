@@ -4,7 +4,7 @@ ujson==5.7.0
 python-box[all]~=6.0
 PyYAML==6.0
 aioboto3==10.4.0
-aiobotocore==2.4.2
+aiobotocore==2.9.1
 pytest-env==0.8.1
 asynctest==0.13.0
 sphinx==6.1.3
