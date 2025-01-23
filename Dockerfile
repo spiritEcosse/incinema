@@ -1,4 +1,4 @@
-FROM python:3.11.1
+FROM python:3.14.0a4
 
 RUN apt update
 RUN apt install -y \
