@@ -11,3 +11,5 @@ sphinx_rtd_theme
 ordered-set
 openai
 pytest-asyncio
+anyio>=4.4.0 # not directly required, pinned by Snyk to avoid a vulnerability
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
