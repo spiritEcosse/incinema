@@ -1,6 +1,7 @@
-from _decimal import Decimal
+import re
 from dataclasses import dataclass
-from typing import List
+from decimal import Decimal
+from typing import List, Optional
 
 import aioboto3
 
@@ -18,17 +19,19 @@ class Video(DataClassJSONSerializer):
     'http://example.com/video1.mp4'
     """
     id: str
-    url: str = ""
+    url: str
 
-    @classmethod
-    def _post_deserialize_id(cls, obj):
-        """
-        >>> Video._post_deserialize_id(Video(id="vi2335949337"))
-        >>> Video._post_deserialize_id(Video("string"))
-        Traceback (most recent call last):
-        AssertionError: Not starting with vi
-        """
-        assert obj.id.startswith('vi'), "Not starting with vi"
+
+@dataclass
+class Description(DataClassJSONSerializer):
+    ru: str = ""
+    en: str = ""
+
+
+@dataclass
+class Title(DataClassJSONSerializer):
+    en: str
+    ru: str = ""
 
 
 @dataclass
@@ -36,10 +39,12 @@ class Item(DataClassJSONSerializer):
     """A class representing an item
 
     >>> video = Video('vid1', 'http://example.com/video1.mp4')
-    >>> item = Item('it1', 'Funny Video', "movie", 2020, 120, 4.5, video)
+    >>> title = Title(en='Funny Video')
+    >>> description = Description(en="Description")
+    >>> item = Item('it1', title, "movie", 2020, 120, 4.5, description, video)
     >>> item.id
     'it1'
-    >>> item.title
+    >>> item.title.en
     'Funny Video'
     >>> item.titleType
     'movie'
@@ -54,27 +59,33 @@ class Item(DataClassJSONSerializer):
     """
 
     id: str
-    title: str
+    title: Title
     titleType: str
     year: int
     duration: int
     rating: Decimal
-    video: Video = None
+    background_audio: str
+    description: Optional[Description] = None
+    video: Optional[Video] = None
+
+    def title_to_dir(self) -> str:
+        return re.sub(r'[^a-zA-Z0-9_\-\.]', '_', self.title.en).lower()
 
     def to_string(self):
         """
         >>> Item(
-        ...    id="tt4154756", title='Avengers: Infinity War', titleType="movie", year=2018, duration=149, rating=8.4,
+        ...    id="tt4154756", title=Title(en='Avengers: Infinity War'), titleType="movie", year=2018, duration=149, rating=8.4,
         ...    video=Video(id="vi2335949337", url='https://url')
         ... ).to_string()
-        Назва\: Avengers: Infinity War
-        Рік\: 2018
-        Тривалість\: 149 хв
-        Рейтинг IMDB\: 8.4/10
+        Title: Avengers: Infinity War
+        Year: 2018
+        Duration: 149 min
+        IMDB: 8.4/10
 
         :return: str
         """
-        print(f"Назва\: {self.title}\nРік\: {self.year}\nТривалість\: {self.duration} хв\nРейтинг IMDB\: {self.rating}/10")
+        return f"Title: {self.title.en}\nYear: {self.year}\nDuration: {self.duration} min\nIMDB: {self.rating}/10".replace(
+            ":", "\\:")
 
     @classmethod
     def table(cls):
@@ -112,8 +123,7 @@ class Item(DataClassJSONSerializer):
         session = aioboto3.Session()
         async with session.resource('dynamodb') as dynamo_resource:
             return await dynamo_resource.batch_get_item(RequestItems={
-                cls.table():  {
+                cls.table(): {
                     "Keys": ids,
-                    "ProjectionExpression": "id"
                 }
             })

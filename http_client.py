@@ -1,12 +1,16 @@
 import asyncio
+import logging
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any
 
 import aiohttp
-import async_timeout
 
 from serializer import DataClassJSONSerializer
 from settings import HOST_API_URL, HOST_API_TOKEN
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 @dataclass
@@ -44,29 +48,27 @@ class HttpClient(DataClassJSONSerializer):
 
         >>> http_client = HttpClient.from_dict({"urls": [], "server": 'example.com', "token": '1234567890'})
         >>> http_client._header
-        {'X-RapidAPI-Key': '1234567890', 'X-RapidAPI-Host': 'example.com'}
+        {'Authorization': 'Bearer 1234567890'}
         """
         return {
-            'X-RapidAPI-Key': self.token,
-            'X-RapidAPI-Host': self.server
+            'Authorization': f'Bearer {self.token}',
         }
 
     async def run(self):
         """Start point for non async context"""
-
         return await self.gather_tasks()
 
     async def request(self, url, response) -> Any:
         """A coroutine to request a http_client"""
-        # raise Exception(inspect.isawaitable(response.json()))
-
-        return await response.json()
+        data = await response.json()
+        if response.status != HTTPStatus.OK:
+            raise Exception(f"status: {response.status}, {data}")
+        return data
 
     async def get_response(self, url, session):
-        await asyncio.sleep(0.2)
-        async with async_timeout.timeout(5000):
-            async with session.get(url) as response:
-                return await self.request(url, response)
+        async with asyncio.timeout(20):
+            response = await session.get(url)
+            return await self.request(url, response)
 
     async def gather_tasks(self):
         async with aiohttp.ClientSession(self.server_name, headers=self._header) as session:
