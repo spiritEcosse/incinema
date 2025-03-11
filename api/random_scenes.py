@@ -54,15 +54,16 @@ class RandomScenes:
         end_list = []
 
         # First pass: Select segments until we're close to the target duration
+        more_duration_audio = self.duration_audio + 20
         for index in indexes:
-            if total_selected_duration >= self.duration_audio:
+            if total_selected_duration >= more_duration_audio:
                 break
 
             item = scenes[index]
             start_time, duration_str, duration_seconds = item
 
             # Only add if it won't exceed the target duration
-            if total_selected_duration + duration_seconds <= self.duration_audio:
+            if total_selected_duration + duration_seconds <= more_duration_audio:
                 total_selected_duration += duration_seconds
                 end_list.append((start_time, duration_str))
 

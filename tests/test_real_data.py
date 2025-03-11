@@ -1,9 +1,11 @@
+from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
 import pytest
 
-from main import handler, data
+from main import handler
+from settings import BASE_DIR_SETS
 
 
 @pytest.mark.skip(reason="This test is real data")
@@ -12,11 +14,10 @@ class TestDataReal(IsolatedAsyncioTestCase):
     maxDiff = None
 
     async def asyncSetUp(self) -> None:
-        self.item_id_1 = "tt4154756"
-        self.item_id_2 = "tt0050825"
-        self.item_id_3 = "tt15325794"
-        self.data = {'title': data['title'], 'items': data['items']}
+        # self.data = Path(f"{BASE_DIR_SETS}/adventure/adventure.json")
+        # self.data = Path(f"{BASE_DIR_SETS}/adventure/adventure.json")
+        self.data = Path(f"{BASE_DIR_SETS}/comedy/comedy.json")
+        # self.data = Path(f"{BASE_DIR_SETS}/survival/survival.json")
 
     async def test_real_data(self, *args):
-        # loop.run_until_complete(Item.delete_all_items())
         await handler(self.data)
