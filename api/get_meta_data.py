@@ -38,6 +38,10 @@ class GetMetaData:
         ids_to_process = OrderedSet(self.serializer_object.ids_to_set() - existing_ids)
         self.items = [Item.from_dict(item) for item in response.Responses.item]
 
+        for item in self.serializer_object.items:
+            abs_path = os.path.join(BASE_DIR_MOVIES, item.title_to_dir())
+            Path(abs_path).mkdir(exist_ok=True)
+
         if ids_to_process:
             http_client = HttpClient.from_dict(
                 {"urls": [f"{self.url.format(_id)}" for _id in ids_to_process]}
@@ -60,7 +64,7 @@ class GetMetaData:
                 )
 
             await GetVideos(items=self.items).run()
-            await Item.save(self.items)
+        await Item.save(self.items)
         self.run_executions()
         await self.do_set()
 

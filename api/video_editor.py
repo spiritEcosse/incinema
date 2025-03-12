@@ -88,6 +88,8 @@ class VideoEditor:
 
     async def do_audio(self):
         if not os.path.isfile(self.audio) or self.re_do_audio:
+            if self.item.description.en is None:
+                raise RuntimeError(f"Description for {self.item.title.en} is empty. id: {self.item.id}")
             print(f"do_audio: {self.dir}")
             client = OpenAI()
             response = client.audio.speech.create(

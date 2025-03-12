@@ -26,6 +26,9 @@ class InitItem(DataClassJSONSerializer):
         """
         assert obj.id.startswith('tt'), "Not starting with tt"
 
+    def title_to_dir(self) -> str:
+        return re.sub(r'[^a-zA-Z0-9_\-\.]', '_', self.title.en).lower()
+
 
 @dataclass
 class InitialData(DataClassJSONSerializer):

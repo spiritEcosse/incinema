@@ -33,12 +33,12 @@ class GetVideos:
             #     if best_video:
             #         break
             for video in box.results:
-                if video.site == "YouTube" and video.size == self.size and video.type == "Trailer":
+                if video.site == "YouTube" and video.size >= self.size and video.type == "Trailer":
                     print(
                         f"id: {self.items[index].id}, title: {self.items[index].title.en}, url: https://www.youtube.com/watch?v={video.key}")
 
             for video in box.results:
-                if video.site == "YouTube" and video.size == self.size and video.type == "Trailer":
+                if video.site == "YouTube" and video.size >= self.size and video.type == "Trailer":
                     best_video = video
                     break
 

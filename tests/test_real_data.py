@@ -16,7 +16,8 @@ class TestDataReal(IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         # self.data = Path(f"{BASE_DIR_SETS}/adventure/adventure.json")
         # self.data = Path(f"{BASE_DIR_SETS}/adventure/adventure.json")
-        self.data = Path(f"{BASE_DIR_SETS}/comedy/comedy.json")
+        # self.data = Path(f"{BASE_DIR_SETS}/comedy/comedy.json")
+        self.data = Path(f"{BASE_DIR_SETS}/sci-fi/sci-fi.json")
         # self.data = Path(f"{BASE_DIR_SETS}/survival/survival.json")
 
     async def test_real_data(self, *args):
