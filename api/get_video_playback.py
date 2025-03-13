@@ -34,6 +34,6 @@ class GetVideoPlayback:
                             break
 
                 if not best_url:
-                    raise Exception(f"title: {self.items[index].title.en}, no compatible URL found {box}")
+                    raise RuntimeError(f"title: {self.items[index].title.en}, no compatible URL found {box}")
 
                 self.items[index].video.url = best_url

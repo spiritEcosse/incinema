@@ -50,6 +50,8 @@ class HttpClient(DataClassJSONSerializer):
         >>> http_client._header
         {'Authorization': 'Bearer 1234567890'}
         """
+        if not self.token:
+            return {}
         return {
             'Authorization': f'Bearer {self.token}',
         }
@@ -62,7 +64,7 @@ class HttpClient(DataClassJSONSerializer):
         """A coroutine to request a http_client"""
         data = await response.json()
         if response.status != HTTPStatus.OK:
-            raise Exception(f"status: {response.status}, {data}")
+            raise RuntimeError(f"url: {url}, status: {response.status}, {data}")
         return data
 
     async def get_response(self, url, session):

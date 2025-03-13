@@ -60,11 +60,11 @@ class Item(DataClassJSONSerializer):
 
     id: str
     title: Title
-    titleType: str
-    year: int
-    duration: int
-    rating: Decimal
-    background_audio: str
+    titleType: Optional[str] = ""
+    duration: Optional[int] = 0
+    rating: Optional[Decimal] = Decimal("0.0")
+    background_audio: Optional[str] = ""
+    year: Optional[int] = 0
     description: Optional[Description] = None
     video: Optional[Video] = None
 

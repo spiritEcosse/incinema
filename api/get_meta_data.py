@@ -13,7 +13,7 @@ from api.get_videos import GetVideos
 from api.video_editor import make_trailer
 from http_client import HttpClient
 from models.initial_data import InitialData
-from models.video import Item, Title, Description
+from models.video import Item
 from settings import BASE_DIR, BASE_DIR_MOVIES
 
 logger = logging.getLogger(__name__)
@@ -35,8 +35,17 @@ class GetMetaData:
     async def wrapper_run(self):
         response = Box(await Item.batch_get_item(ids=self.serializer_object.ids_items()))
         existing_ids = OrderedSet([item.id for item in response.Responses.item])
-        ids_to_process = OrderedSet(self.serializer_object.ids_to_set() - existing_ids)
         self.items = [Item.from_dict(item) for item in response.Responses.item]
+
+        # Find items with videos from original items and add them if not already included
+        items_with_videos = [item for item in self.serializer_object.items if item.video]
+        for item in items_with_videos:
+            if item.id not in existing_ids:
+                self.items.append(item)
+
+        # Now calculate ids_to_process (excluding both existing IDs and IDs with videos)
+        ids_with_videos = OrderedSet([item.id for item in items_with_videos])
+        ids_to_process = OrderedSet(self.serializer_object.ids_to_set() - existing_ids - ids_with_videos)
 
         for item in self.serializer_object.items:
             abs_path = os.path.join(BASE_DIR_MOVIES, item.title_to_dir())
@@ -49,21 +58,17 @@ class GetMetaData:
             for response in await http_client.run():
                 key = response['imdb_id']
                 box = Box(response)
-                description = self.serializer_object.items_map[key].description
-                self.items.append(
-                    Item(
-                        id=key,
-                        background_audio=self.serializer_object.items_map[key].background_audio,
-                        title=Title(en=self.serializer_object.items_map[key].title.en),
-                        titleType='',
-                        year=int(box.release_date.split("-")[0]),
-                        duration=box.runtime,
-                        rating=round(box.vote_average, 1),
-                        description=Description(en=description.en if description else None)
-                    )
-                )
+                item = self.serializer_object.items_map[key]
 
-            await GetVideos(items=self.items).run()
+                # Update only the necessary fields from the response
+                item.year = int(box.release_date.split("-")[0])
+                item.duration = box.runtime
+                item.rating = round(box.vote_average, 1)
+
+                # Add the updated item to self.items
+                self.items.append(item)
+
+            await GetVideos(items=self.items, ids=ids_to_process).run()
         await Item.save(self.items)
         self.run_executions()
         await self.do_set()

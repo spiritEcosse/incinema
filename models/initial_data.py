@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from ordered_set import OrderedSet
 
-from models.video import Title, Description
+from models.video import Title, Description, Video, Item
 from serializer import DataClassJSONSerializer
 
 
@@ -13,6 +13,7 @@ from serializer import DataClassJSONSerializer
 class InitItem(DataClassJSONSerializer):
     id: str
     title: Title
+    video: Optional[Video] = None
     description: Optional[Description] = None
     background_audio: Optional[str] = ""
 
@@ -38,7 +39,7 @@ class InitialData(DataClassJSONSerializer):
     >>> InitialData.from_json('{"items": [{"id":"tt1233333", "title": {"en":""}, "description": {"en": ""}}, {"id":"tt1233334", "title": {"en":""}, "description": {"en": ""}}], "title": ""}')
     InitialData(items=[InitItem(id='tt1233333', title=Title(en='', ru=''), description=Description(ru='', en='')), InitItem(id='tt1233334', title=Title(en='', ru=''), description=Description(ru='', en=''))], title='')
     """
-    items: List[InitItem]
+    items: List[Item]
     title: str
 
     def title_to_dir(self) -> str:

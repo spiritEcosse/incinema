@@ -45,7 +45,7 @@ class VideoEditor:
         self.re_caption = False
         self.re_add_audio = False
         self.re_add_background_audio = False
-        self.re_upload_all_files = False
+        self.re_upload_files = False
         self.font_size = 35
         self.font_color = 'white'
         self.position_x = 20
@@ -53,6 +53,7 @@ class VideoEditor:
         self.dir = str(self.item.title_to_dir())
         self.abs_path = os.path.join(BASE_DIR_MOVIES, self.dir)
         self.audio_duration = 60
+        self.session = aioboto3.Session()
 
     async def run(self):
         try:
@@ -70,7 +71,7 @@ class VideoEditor:
             # ###########################################################################  await self.do_caption()
             await self.add_audio()
             # ###########################################################################  await self.add_background_audio()
-            # ###########################################################################  await self.upload_all_files()
+            await self.upload_files()
         except Exception as e:
             logger.exception(e)
 
@@ -83,8 +84,7 @@ class VideoEditor:
                 self.re_random_scenes = True
             except Exception as e:
                 print(f"Error downloading, dir: {self.dir}", command)
-                logger.exception(e)
-                self.re_download = True
+                raise e
 
     async def do_audio(self):
         if not os.path.isfile(self.audio) or self.re_do_audio:
@@ -148,23 +148,21 @@ class VideoEditor:
                 f"-c:v copy -c:a aac -map 0:v:0 -map 1:a:0 {self.final}"
             )
             subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
+            self.re_upload_files = True
 
-    async def upload_all_files(self):
-        if self.re_upload_all_files:
-            await self.tasks_upload(glob.glob("*"))
+    async def upload_files(self):
+        if self.re_upload_files:
+            files = [self.final, self.audio, self.original]
+            tasks = [self.upload(file_name) for file_name in files]
+            return await asyncio.gather(*tasks)
 
     async def upload(self, file_name: str) -> None:
-        s3_key = f"{self.dir}/{file_name}"
+        s3_key = f"movies/{self.dir}/{file_name}"
         print(f"upload {s3_key}")
 
-        session = aioboto3.Session()
-        async with session.client("s3") as s3:
+        async with self.session.client("s3") as s3:
             with Path(self.abs_path, file_name).open("rb") as file_data:
                 await s3.upload_fileobj(file_data, BUCKET_VIDEO, s3_key)
-
-    async def tasks_upload(self, files: list):
-        tasks = [self.upload(file_name) for file_name in files]
-        return await asyncio.gather(*tasks)
 
     async def get_duration_of_file(self, file_name):
         output = subprocess.check_output(f'ffprobe -i {file_name} -show_entries format=duration -v quiet -of csv="p=0"',
@@ -211,7 +209,7 @@ class VideoEditor:
     #         subprocess.check_output(
     #             f'ffmpeg -y -i {self.video_audio} -i {self.item_background_audio} -c:v copy -filter_complex "[0:a][1:a] amix=inputs=2:duration=longest [audio_out]" -c:a aac -map 0:v -map "[audio_out]" {self.video_background_audio}',
     #             shell=True)
-    #         self.re_upload_all_files = True
+    #         self.re_upload_files = True
 
     # async def do_caption(self):
     #     if not os.path.isfile(self.caption) or self.re_caption:

@@ -1,11 +1,12 @@
 import logging
 import os
+import re
 
 from box import Box
 
 from http_client import HttpClient
 from models.video import Video
-from settings import BASE_DIR_MOVIES
+from settings import BASE_DIR_MOVIES, YOUTUBE_API_KEY
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -15,36 +16,78 @@ class GetVideos:
     url = "/3/movie/{}/videos?language=en-US"
     size = 1080
 
-    # sizes = [1080, 720]
-
-    def __init__(self, items):
+    def __init__(self, items, ids):
         self.items = items
+        self.ids = ids
 
-    async def run(self):
+    @staticmethod
+    async def get_best_video(item, candidate_videos):
         http_client = HttpClient.from_dict(
-            {"urls": [f"{self.url.format(item.id)}" for item in self.items]}
+            {"server": "www.googleapis.com", "token": "", "urls": [
+                f"youtube/v3/videos?id={video.key}&part=contentDetails&key={YOUTUBE_API_KEY}"
+                for video in candidate_videos]}
         )
         responses = await http_client.run()
+
+        longest_video = None
+        max_duration = 0
+
+        # For each candidate, get the actual duration
         for index, response in enumerate(responses):
+            video = candidate_videos[index]
+            try:
+                # Extract duration in ISO 8601 format (PT1M30S = 1 minute 30 seconds)
+                if response.get('items') and len(response['items']) > 0:
+                    duration_str = response['items'][0]['contentDetails']['duration']
+
+                    # Parse the duration string (PT1M30S format)
+                    minutes = re.search(r'(\d+)M', duration_str)
+                    seconds = re.search(r'(\d+)S', duration_str)
+
+                    # Calculate total seconds
+                    total_seconds = 0
+                    if minutes:
+                        total_seconds += int(minutes.group(1)) * 60
+                    if seconds:
+                        total_seconds += int(seconds.group(1))
+
+                    print(f"title: {item.title.en}", f"duration: {total_seconds / 60} seconds")
+                    # Update longest video if this one is longer
+                    if total_seconds > max_duration:
+                        max_duration = total_seconds
+                        longest_video = video
+            except Exception as e:
+                print(f"Error fetching duration for video {video.key}: {e}")
+        return longest_video
+
+    async def run(self):
+        item_id_pairs = [(item, item.id) for item in self.items if item.id in self.ids]
+
+        # Fetch videos only for matching items
+        http_client = HttpClient.from_dict({
+            "urls": [f"{self.url.format(item_id)}" for _, item_id in item_id_pairs]
+        })
+
+        responses = await http_client.run()
+
+        # Process each response
+        for i, response in enumerate(responses):
+            item, _ = item_id_pairs[i]
             box = Box(response)
-            # Find best available quality video
-            best_video = None
-            # for size in self.sizes:
-            #     if best_video:
-            #         break
-            for video in box.results:
-                if video.site == "YouTube" and video.size >= self.size and video.type == "Trailer":
-                    print(
-                        f"id: {self.items[index].id}, title: {self.items[index].title.en}, url: https://www.youtube.com/watch?v={video.key}")
 
-            for video in box.results:
-                if video.site == "YouTube" and video.size >= self.size and video.type == "Trailer":
-                    best_video = video
-                    break
+            # Filter for YouTube trailers with the right size
+            candidate_videos = [
+                video for video in box.results
+                if video.site == "YouTube" and video.size >= self.size and video.type == "Trailer"
+            ]
 
+            # Get the best video based on duration
+            best_video = await self.get_best_video(item, candidate_videos)
+
+            # Update the item if we found a suitable video
             if best_video:
-                _id = best_video.key
-                self.items[index].video = Video(id=_id, url=f'https://www.youtube.com/watch?v={_id}')
-            elif not os.path.isfile(os.path.join(BASE_DIR_MOVIES, self.items[index].title_to_dir(), "original.mp4")):
+                video_id = best_video.key
+                item.video = Video(id=video_id, url=f'https://www.youtube.com/watch?v={video_id}')
+            elif not os.path.isfile(os.path.join(BASE_DIR_MOVIES, item.title_to_dir(), "original.mp4")):
                 raise RuntimeError(
-                    f"id: {self.items[index].id}, title: {self.items[index].title.en}, no compatible URL found {box}")
+                    f"id: {item.id}, title: {item.title.en}, (ID: {item.id}), no compatible URL found {box}")
