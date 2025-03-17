@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Set
 
 import aioboto3
 
@@ -34,8 +34,66 @@ class Title(DataClassJSONSerializer):
     ru: str = ""
 
 
+class MixinDynamoTable:
+    @classmethod
+    def table(cls):
+        return cls.__name__.lower()
+
+    @classmethod
+    async def save(cls, items: List):
+        session = aioboto3.Session()
+        async with session.resource('dynamodb') as dynamo_resource:
+            table = await dynamo_resource.Table(cls.table())
+
+            async with table.batch_writer() as batch:
+                for item in items:
+                    await batch.put_item(Item=item.to_dict())
+
+    @classmethod
+    async def get_existing_ids(cls) -> Set[str]:
+        """Get all existing IDs from the DynamoDB table"""
+        existing_ids = set()
+        session = aioboto3.Session()
+
+        async with session.resource('dynamodb') as dynamo_resource:
+            table = await dynamo_resource.Table(cls.table())
+
+            # Scan the table to get all IDs
+            response = await table.scan(ProjectionExpression="id")
+            for item in response.get('Items', []):
+                existing_ids.add(item['id'])
+
+            # Handle pagination for large tables
+            while 'LastEvaluatedKey' in response:
+                response = await table.scan(
+                    ProjectionExpression="id",
+                    ExclusiveStartKey=response['LastEvaluatedKey']
+                )
+                for item in response.get('Items', []):
+                    existing_ids.add(item['id'])
+
+        return existing_ids
+
+
 @dataclass
-class Item(DataClassJSONSerializer):
+class Movie(MixinDynamoTable, DataClassJSONSerializer):
+    id: str
+    title: Title
+    release_date: str
+    genres: List[str]
+    actors: List[str]
+    directors: List[str]
+    type: Optional[str] = ""
+    vote_average: Optional[Decimal] = Decimal("0.0")
+    runtime: Optional[Decimal] = Decimal("0.0")
+    vote_count: Optional[Decimal] = Decimal("0.0")
+    plot: Optional[str] = ""
+    video: Optional[Video] = None
+    description: Optional[Description] = None
+
+
+@dataclass
+class Item(MixinDynamoTable, DataClassJSONSerializer):
     """A class representing an item
 
     >>> video = Video('vid1', 'http://example.com/video1.mp4')
@@ -86,20 +144,6 @@ class Item(DataClassJSONSerializer):
         """
         return f"Title: {self.title.en}\nYear: {self.year}\nDuration: {self.duration} min\nIMDB: {self.rating}/10".replace(
             ":", "\\:")
-
-    @classmethod
-    def table(cls):
-        return cls.__name__.lower()
-
-    @classmethod
-    async def save(cls, items: List):
-        session = aioboto3.Session()
-        async with session.resource('dynamodb') as dynamo_resource:
-            table = await dynamo_resource.Table(cls.table())
-
-            async with table.batch_writer() as batch:
-                for item in items:
-                    await batch.put_item(Item=item.to_dict())
 
     @classmethod
     async def delete_all_items(cls) -> None:

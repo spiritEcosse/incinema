@@ -1,10 +1,9 @@
-from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
 import pytest
 
-from main import handler
+from main import handler, gather_tasks, upload_set, retrieve_and_save_all_movies
 from settings import BASE_DIR_SETS
 
 
@@ -14,15 +13,23 @@ class TestDataReal(IsolatedAsyncioTestCase):
     maxDiff = None
 
     async def asyncSetUp(self) -> None:
-        # self.data1 = Path(f"{BASE_DIR_SETS}/action/action.json")
-        self.data = Path(f"{BASE_DIR_SETS}/adventure/adventure.json")
-        # self.data3 = Path(f"{BASE_DIR_SETS}/comedy/comedy.json")
-        # self.data4 = Path(f"{BASE_DIR_SETS}/mistery/mistery.json")
-        # self.data5 = Path(f"{BASE_DIR_SETS}/series/series.json")
-        # self.data6 = Path(f"{BASE_DIR_SETS}/survival/survival.json")
-        # self.data7 = Path(f"{BASE_DIR_SETS}/sci-fi/sci-fi.json")
-        # self.all_data = [self.data1, self.data2, self.data3, self.data4, self.data5, self.data6, self.data7]
-        # self.data = Path(f"{BASE_DIR_SETS}/series2/series2.json")
+        self.sets = [
+            'series2',
+            'action',
+            'comedy',
+            'mistery',
+            'sci-fi',
+            'survival',
+            'series',
+        ]
+        self._set = self.sets[1]
+
+    async def test_real_data_upload_set(self, *args):
+        await gather_tasks(self.sets[1:2], upload_set)
 
     async def test_real_data(self, *args):
-        await handler(self.data)
+        data = BASE_DIR_SETS / self._set / f'{self._set}.json'
+        await handler(data)
+
+    async def test_retrieve_and_save_all_movies(self, *args):
+        await retrieve_and_save_all_movies()

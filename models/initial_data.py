@@ -1,12 +1,19 @@
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 from typing import List, Optional
 
 from ordered_set import OrderedSet
 
-from models.video import Title, Description, Video, Item
+from models.video import Title, Description, Video, Item, Movie
 from serializer import DataClassJSONSerializer
+
+
+@dataclass
+class MovieResult:
+    movies: List[Movie] = field(default_factory=list)
+    total_pages: int = 0
+    total_results: int = 0
 
 
 @dataclass

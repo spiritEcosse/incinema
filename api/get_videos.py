@@ -1,5 +1,4 @@
 import logging
-import os
 import re
 
 from box import Box
@@ -88,6 +87,6 @@ class GetVideos:
             if best_video:
                 video_id = best_video.key
                 item.video = Video(id=video_id, url=f'https://www.youtube.com/watch?v={video_id}')
-            elif not os.path.isfile(os.path.join(BASE_DIR_MOVIES, item.title_to_dir(), "original.mp4")):
+            elif not (BASE_DIR_MOVIES / item.title_to_dir() / "original.mp4").is_file():
                 raise RuntimeError(
                     f"id: {item.id}, title: {item.title.en}, (ID: {item.id}), no compatible URL found {box}")

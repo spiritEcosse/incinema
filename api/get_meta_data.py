@@ -14,7 +14,7 @@ from api.video_editor import make_trailer
 from http_client import HttpClient
 from models.initial_data import InitialData
 from models.video import Item
-from settings import BASE_DIR, BASE_DIR_MOVIES
+from settings import BASE_DIR_MOVIES
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -48,8 +48,7 @@ class GetMetaData:
         ids_to_process = OrderedSet(self.serializer_object.ids_to_set() - existing_ids - ids_with_videos)
 
         for item in self.serializer_object.items:
-            abs_path = os.path.join(BASE_DIR_MOVIES, item.title_to_dir())
-            Path(abs_path).mkdir(exist_ok=True)
+            (BASE_DIR_MOVIES / item.title_to_dir()).mkdir(parents=True, exist_ok=True)
 
         if ids_to_process:
             http_client = HttpClient.from_dict(
@@ -81,8 +80,8 @@ class GetMetaData:
     async def do_set(self):
         set_folder = self.serializer_object.title_to_dir()
         logger.info(f"do_set : {set_folder}")
-        path_to_set = os.path.join(BASE_DIR_MOVIES, "sets", set_folder)
-        Path(path_to_set).mkdir(exist_ok=True)
+        path_to_set = BASE_DIR_MOVIES / "sets" / set_folder
+        path_to_set.mkdir(parents=True, exist_ok=True)
         os.chdir(path_to_set)
 
         files = [item.title_to_dir() for item in self.items]
@@ -91,15 +90,9 @@ class GetMetaData:
             raise RuntimeError("files must be 10")
 
         for movie_title in files:
-            full_path_movie = str(os.path.join(BASE_DIR_MOVIES, movie_title))
-            final_movie = os.path.join(full_path_movie, "final.mp4")
+            full_path_movie = Path(BASE_DIR_MOVIES, movie_title)
+            final_movie = full_path_movie / "final.mp4"
             subprocess.check_output(f"ln -sf {final_movie} {path_to_set}/{movie_title}.mp4", shell=True)
-
-    def write_description(self):
-        file_list_descriptions = os.path.join(BASE_DIR, "sets", "data1_descriptions.txt")
-        with open(file_list_descriptions, 'w') as f:
-            for item in self.items:
-                f.write(f"{item.to_string()}\n\n")
 
 
 def md5sum(filename):

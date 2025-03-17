@@ -1,7 +1,55 @@
+import asyncio
+import glob
 import json
+import re
 from pathlib import Path
 
+from api.fetch_all_movies import FetchAllMovies
 from api.get_meta_data import GetMetaData
+from clients.aws import AWSS3Client
+from settings import BASE_DIR_SETS, BUCKET_VIDEO
+
+
+async def gather_tasks(data: list, func):
+    tasks = [func(obj) for obj in data]
+    await asyncio.gather(*tasks)
+
+
+async def upload_set(_set):
+    # Create file mappings using a loop
+    file_mappings = []
+    full_path_set = BASE_DIR_SETS / _set
+    # First get all files with a dash prefix
+    all_files = glob.glob(str(full_path_set / "*.*"))
+
+    # Then filter out the ones with fps patterns you want to exclude
+    filtered_files = [
+        Path(f) for f in all_files if not re.search(r".*-\d+fps\.mp4$", f)
+    ]
+
+    for file_path in filtered_files:
+        s3_key = f"sets/{_set}/{file_path.name}"
+        file_mappings.append((file_path, s3_key))
+
+    client = AWSS3Client(file_mappings, BUCKET_VIDEO)
+    await client.upload_files()
+
+
+async def retrieve_and_save_all_movies():
+    # For testing, limit to 5 pages to avoid hitting rate limits
+    start_page = 500
+    max_pages = 1000
+    batch_size = 5
+
+    total_new_movies = await FetchAllMovies(
+        start_page=start_page,
+        max_pages=max_pages,
+        batch_size=batch_size
+    ).fetch_all_movies()
+
+    print(f"\nProcess complete!")
+    print(f"Added {total_new_movies} new movies to the database")
+    print(f"Processed pages {start_page} to {start_page + max_pages - 1}")
 
 
 async def handler(json_file_path: Path):

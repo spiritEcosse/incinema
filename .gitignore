@@ -11,3 +11,4 @@ static/
 .pytest_cache
 movies
 background_audio
+.env

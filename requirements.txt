@@ -11,3 +11,5 @@ sphinx_rtd_theme
 ordered-set
 openai
 pytest-asyncio
+python-dotenv
+aiohttp

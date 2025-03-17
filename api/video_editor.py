@@ -6,12 +6,12 @@ import re
 import subprocess
 from decimal import Decimal
 from itertools import cycle
-from pathlib import Path
 
 import aioboto3
 from openai import OpenAI
 
 from api.random_scenes import RandomScenes
+from clients.aws import AWSS3Client
 from models.video import Item, Description, Title
 from settings import BASE_DIR, BUCKET_VIDEO, BASE_DIR_MOVIES
 
@@ -33,7 +33,6 @@ class VideoEditor:
         self.final = "final.mp4"
         self.video_background_audio = "video_background_audio.mp4"
         self.item_background_audio = "background_audio.mp3"
-        self.background_audio = os.path.join(BASE_DIR, "background_audio", f"{self.item.background_audio}.mp3")
         self.re_download = False
         # self.re_do_resolution = False
         self.re_do_audio = False
@@ -51,7 +50,7 @@ class VideoEditor:
         self.position_x = 20
         self.position_y = 'h-text_h-20'
         self.dir = str(self.item.title_to_dir())
-        self.abs_path = os.path.join(BASE_DIR_MOVIES, self.dir)
+        self.abs_path = BASE_DIR_MOVIES / self.dir
         self.audio_duration = 60
         self.session = aioboto3.Session()
 
@@ -59,7 +58,7 @@ class VideoEditor:
         try:
             print(f"run : {self.dir}")
 
-            Path(self.abs_path).mkdir(exist_ok=True)
+            self.abs_path.mkdir(exist_ok=True)
             os.chdir(self.abs_path)
             await self.download()
             await self.do_audio()
@@ -123,7 +122,7 @@ class VideoEditor:
             print(f"cut_scenes {self.item}")
             subprocess.check_output("rm -fr original-*", shell=True)
             command = (
-                f"{os.path.join(BASE_DIR, 'scene_cut.sh')} -i {self.original} -c {self.file_random_scenes}"
+                f"{BASE_DIR / 'scene_cut.sh'} -i {self.original} -c {self.file_random_scenes}"
             )
             subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
             self.re_concat = True
@@ -135,7 +134,7 @@ class VideoEditor:
 
             with open(self.list_concat, 'w') as f:
                 for file_name in files:
-                    f.write("file '{}'\n".format(os.path.join(self.abs_path, file_name)))
+                    f.write("file '{}'\n".format(self.abs_path / file_name))
             subprocess.check_output(f"ffmpeg -y -f concat -safe 0 -i {self.list_concat} -c copy {self.concat}",
                                     shell=True)
             self.re_add_audio = True
@@ -153,16 +152,16 @@ class VideoEditor:
     async def upload_files(self):
         if self.re_upload_files:
             files = [self.final, self.audio, self.original]
-            tasks = [self.upload(file_name) for file_name in files]
-            return await asyncio.gather(*tasks)
 
-    async def upload(self, file_name: str) -> None:
-        s3_key = f"movies/{self.dir}/{file_name}"
-        print(f"upload {s3_key}")
+            # Create file mappings using a loop
+            file_mappings = []
+            for file_name in files:
+                local_path = self.abs_path / file_name
+                s3_key = f"movies/{self.dir}/{file_name}"
+                file_mappings.append((local_path, s3_key))
 
-        async with self.session.client("s3") as s3:
-            with Path(self.abs_path, file_name).open("rb") as file_data:
-                await s3.upload_fileobj(file_data, BUCKET_VIDEO, s3_key)
+            client = AWSS3Client(file_mappings, BUCKET_VIDEO)
+            await client.upload_files()
 
     async def get_duration_of_file(self, file_name):
         output = subprocess.check_output(f'ffprobe -i {file_name} -show_entries format=duration -v quiet -of csv="p=0"',
@@ -198,102 +197,6 @@ class VideoEditor:
     def get_original_scenes(self):
         files = glob.glob(fr'{self.original.split(".")[0]}-*.mp4')
         return sorted(files, key=lambda s: int(re.search(r'\d+', s).group()))
-
-    # async def add_background_audio(self):
-    #     if (not os.path.isfile(self.video_background_audio) or self.re_add_background_audio) and os.path.isfile(
-    #             self.background_audio) and os.path.isfile(self.video_audio):
-    #         print(f"add_background_audio: {self.dir}")
-    #         subprocess.check_output(
-    #             f"ffmpeg -y -i {self.background_audio} -to {self.audio_duration} {self.item_background_audio}",
-    #             shell=True)
-    #         subprocess.check_output(
-    #             f'ffmpeg -y -i {self.video_audio} -i {self.item_background_audio} -c:v copy -filter_complex "[0:a][1:a] amix=inputs=2:duration=longest [audio_out]" -c:a aac -map 0:v -map "[audio_out]" {self.video_background_audio}',
-    #             shell=True)
-    #         self.re_upload_files = True
-
-    # async def do_caption(self):
-    #     if not os.path.isfile(self.caption) or self.re_caption:
-    #         print(f"do_caption: {self.dir}")
-    #         command = (
-    #             f"ffmpeg -y -i {self.concat} -vf "
-    #             f"\"drawtext=fontfile={self.font_path}: text='{self.item.to_string()}': "
-    #             f"fontsize={self.font_size}: fontcolor={self.font_color}: "
-    #             f"x={self.position_x}: y={self.position_y}\" "
-    #             f"-codec:a copy {self.caption}"
-    #         )
-    #         print(command)
-    #         subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
-    #         self.re_add_audio = True
-
-    # async def tasks_video_detect(self, files: list):
-    #     tasks = [VideoDetect(file_name, f"{self.dir}/{file_name}", position).run() for position, file_name in enumerate(files)]
-    #     return await asyncio.gather(*tasks)
-    #
-    # def split_scene_on_frames(self, scene):
-    #     scene_folder = scene.split('.mp4')[0]
-    #     folder_frames = f"frames-{scene_folder}"
-    #     shutil.rmtree(folder_frames, ignore_errors=True)
-    #     Path(folder_frames).mkdir(exist_ok=True)
-    #     subprocess.run(['ffmpeg', '-i', scene, f'{folder_frames}/frame-%06d.png'])
-    #     return folder_frames
-    #
-    # def get_images_in_folder(self, folder):
-    #     return [os.path.join(BASE_DIR, folder, image) for image in
-    #             os.listdir(os.path.join(BASE_DIR, folder)) if image.endswith(".png")]
-    #
-    # async def check_commercial_scene_image(self):
-    #     if self.re_check_commercial_scene_image:
-    #         print(f"check_commercial_scene_image {self.dir}")
-    #         assert self.get_original_scenes() != [], "get_original_scenes is empty."
-    #         images_exclude = self.get_images_in_folder("images_exclude")
-    #
-    #         data = []
-    #         for file_name in self.get_original_scenes():
-    #             folder_frames = self.split_scene_on_frames(file_name)
-    #             data.append((file_name, folder_frames))
-    #             # print(f"after split_scene_on_frames: {file_name}")
-    #
-    #         tasks = [
-    #             (file_name, image, frame)
-    #             for file_name, folder_frames in data
-    #             for frame in self.get_images_in_folder(f"{self.dir}/{folder_frames}")
-    #             for image in images_exclude
-    #         ]
-    #
-    #         with Pool(10) as p:
-    #             result = p.map(func_compare_image, tasks)
-    #
-    #             print(f"after Pool")
-    #             for video, is_commercial in result:
-    #                 if is_commercial:
-    #                     Path(self.abs_path, video).unlink(missing_ok=True)
-    #                     break
-    #
-    # async def check_commercial_scene(self):
-    #     if self.re_check_commercial_scene:
-    #         print(f"check_commercial_scene {self.dir}")
-    #         # assert self.get_original_scenes() != [], "get_original_scenes is empty."
-    #         list_video_detect = await self.tasks_video_detect(self.get_original_scenes())
-    #         for file_name, is_commercial in list_video_detect:
-    #             if is_commercial:
-    #                 Path(self.abs_path, file_name).unlink(missing_ok=True)
-    #         self.re_concat = True
-
-    # async def do_resolutions(self):
-    #     if self.re_do_resolution:
-    #         print(f"do_resolutions: {self.dir}")
-    #         resolution = subprocess.check_output(f"ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of json {self.original}", shell=True)
-    #         resolution_json = json.loads(resolution)
-    #         box = Box(resolution_json)
-    #
-    #         if box.streams[0].width != 1920:
-    #             [self.do_resolution(file_) for file_ in self.get_original_scenes()]
-    #         self.re_concat = True
-
-    # def do_resolution(self, file_):
-    #     subprocess.run([
-    #         "ffmpeg", "-y", "-i", file_, "-vf", "scale=1920:-1", "-preset", "slow", "-crf", "18", "-ac", "2", f"{file_}{self.file_resolution}"])
-    #     subprocess.check_output(f"mv -f {file_}{self.file_resolution} {file_}", shell=True)
 
 
 def make_trailer(item: Item):
