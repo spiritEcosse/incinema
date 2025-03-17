@@ -21,8 +21,9 @@ class TestDataReal(IsolatedAsyncioTestCase):
             'sci-fi',
             'survival',
             'series',
+            'action2',
         ]
-        self._set = self.sets[1]
+        self._set = self.sets[-1]
 
     async def test_real_data_upload_set(self, *args):
         await gather_tasks(self.sets[1:2], upload_set)

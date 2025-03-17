@@ -1,13 +1,15 @@
 import asyncio
 import logging
-from dataclasses import dataclass
+import random
+from dataclasses import dataclass, field
 from http import HTTPStatus
-from typing import Any
+from typing import Any, Optional
 
 import aiohttp
+from propcache import cached_property
 
 from serializer import DataClassJSONSerializer
-from settings import HOST_API_URL, HOST_API_TOKEN
+from settings import HOST_API_URL
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -31,7 +33,10 @@ class HttpClient(DataClassJSONSerializer):
     """
     urls: list
     server: str = HOST_API_URL
-    token: str = HOST_API_TOKEN
+    headers: dict = field(default_factory=dict)
+    token: Optional[str] = ""
+    sleep: bool = False
+    json: bool = False
 
     @property
     def server_name(self) -> str:
@@ -42,19 +47,19 @@ class HttpClient(DataClassJSONSerializer):
         """
         return f"https://{self.server}"
 
-    @property
-    def _header(self, *args, **kwargs) -> dict:
+    @cached_property
+    def _headers(self, *args, **kwargs) -> dict:
         """A property to get the http_client header
 
         >>> http_client = HttpClient.from_dict({"urls": [], "server": 'example.com', "token": '1234567890'})
-        >>> http_client._header
+        >>> http_client._headers
         {'Authorization': 'Bearer 1234567890'}
         """
-        if not self.token:
-            return {}
-        return {
-            'Authorization': f'Bearer {self.token}',
-        }
+        headers = {}
+        if self.token:
+            headers = {"Authorization": f"Bearer {self.token}"}
+        headers.update(self.headers)
+        return headers
 
     async def run(self):
         """Start point for non async context"""
@@ -62,17 +67,24 @@ class HttpClient(DataClassJSONSerializer):
 
     async def request(self, url, response) -> Any:
         """A coroutine to request a http_client"""
-        data = await response.json()
+        if self.json:
+            data = await response.json()
+        else:
+            data = await response.text()
         if response.status != HTTPStatus.OK:
             raise RuntimeError(f"url: {url}, status: {response.status}, {data}")
         return data
 
     async def get_response(self, url, session):
+        if self.sleep:
+            # Add random delay between 1-3 seconds to avoid being blocked
+            await asyncio.sleep(random.uniform(1, 3))
+
         async with asyncio.timeout(20):
             response = await session.get(url)
             return await self.request(url, response)
 
     async def gather_tasks(self):
-        async with aiohttp.ClientSession(self.server_name, headers=self._header) as session:
+        async with aiohttp.ClientSession(self.server_name, headers=self._headers) as session:
             tasks = (self.get_response(url, session) for url in self.urls)
             return await asyncio.gather(*tasks)

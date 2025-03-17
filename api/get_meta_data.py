@@ -14,7 +14,7 @@ from api.video_editor import make_trailer
 from http_client import HttpClient
 from models.initial_data import InitialData
 from models.video import Item
-from settings import BASE_DIR_MOVIES
+from settings import BASE_DIR_MOVIES, HOST_API_TOKEN
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -52,7 +52,7 @@ class GetMetaData:
 
         if ids_to_process:
             http_client = HttpClient.from_dict(
-                {"urls": [f"{self.url.format(_id)}" for _id in ids_to_process]}
+                {"urls": [f"{self.url.format(_id)}" for _id in ids_to_process], 'token': HOST_API_TOKEN, 'json': True}
             )
             for response in await http_client.run():
                 key = response['imdb_id']

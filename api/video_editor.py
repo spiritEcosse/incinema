@@ -36,7 +36,7 @@ class VideoEditor:
         self.re_download = False
         # self.re_do_resolution = False
         self.re_do_audio = False
-        self.re_random_scenes = False
+        self.re_random_scenes = True
         self.re_cut_scenes = False
         # self.re_check_commercial_scene = False
         # self.re_check_commercial_scene_image = True

@@ -1,5 +1,5 @@
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import List, Optional, Set
 
@@ -79,17 +79,20 @@ class MixinDynamoTable:
 class Movie(MixinDynamoTable, DataClassJSONSerializer):
     id: str
     title: Title
-    release_date: str
+    year: str
     genres: List[str]
-    actors: List[str]
-    directors: List[str]
-    type: Optional[str] = ""
-    vote_average: Optional[Decimal] = Decimal("0.0")
-    runtime: Optional[Decimal] = Decimal("0.0")
-    vote_count: Optional[Decimal] = Decimal("0.0")
-    plot: Optional[str] = ""
+    type: str
+    popularity: int
+    rating: Decimal
+    runtime: Decimal
+    votes: int
+    overview: Optional[str] = ""
+    directors: List[str] = field(default_factory=list)
+    actors: List[str] = field(default_factory=list)
+    imdb_type: Optional[str] = ""
     video: Optional[Video] = None
     description: Optional[Description] = None
+    end_year: Optional[str] = ""
 
 
 @dataclass

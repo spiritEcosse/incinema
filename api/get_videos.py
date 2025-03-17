@@ -5,7 +5,7 @@ from box import Box
 
 from http_client import HttpClient
 from models.video import Video
-from settings import BASE_DIR_MOVIES, YOUTUBE_API_KEY
+from settings import BASE_DIR_MOVIES, YOUTUBE_API_KEY, HOST_API_TOKEN
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -22,9 +22,9 @@ class GetVideos:
     @staticmethod
     async def get_best_video(item, candidate_videos):
         http_client = HttpClient.from_dict(
-            {"server": "www.googleapis.com", "token": "", "urls": [
+            {"server": "www.googleapis.com", "urls": [
                 f"youtube/v3/videos?id={video.key}&part=contentDetails&key={YOUTUBE_API_KEY}"
-                for video in candidate_videos]}
+                for video in candidate_videos], 'json': True}
         )
         responses = await http_client.run()
 
@@ -64,8 +64,8 @@ class GetVideos:
 
         # Fetch videos only for matching items
         http_client = HttpClient.from_dict({
-            "urls": [f"{self.url.format(item_id)}" for _, item_id in item_id_pairs]
-        })
+            "urls": [f"{self.url.format(item_id)}" for _, item_id in item_id_pairs], 'token': HOST_API_TOKEN
+            , 'json': True})
 
         responses = await http_client.run()
 

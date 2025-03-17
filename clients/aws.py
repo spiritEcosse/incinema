@@ -32,7 +32,7 @@ class AWSS3Client:
             else:
                 successes.append((file_path, s3_key))
 
-        print(f"Uploaded {len(successes)} of {len(failures)} files successfully")
+        print(f"Uploaded {len(successes)} of {len(results)} files successfully")
 
         if failures:
             print("Failed uploads:")
