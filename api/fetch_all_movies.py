@@ -18,7 +18,7 @@ class FetchAllMovies:
         'Accept-Language': 'en-US,en;q=0.9'}
     pages_selector = "#__next > main > div.ipc-page-content-container.ipc-page-content-container--center.sc-b8fa3fca-0.jxQzGK > div.ipc-page-content-container.ipc-page-content-container--center > section > section > div > section > section > div:nth-child(2) > div > section > div.ipc-page-grid.ipc-page-grid--bias-left.ipc-page-grid__item.ipc-page-grid__item--span-2 > div.ipc-page-grid__item.ipc-page-grid__item--span-2 > div.sc-13add9d7-6.dCCeCI > div.sc-13add9d7-3.fwjHEn"
     items_selector = "#__next > main > div.ipc-page-content-container.ipc-page-content-container--center.sc-b8fa3fca-0.jxQzGK > div.ipc-page-content-container.ipc-page-content-container--center > section > section > div > section > section > div:nth-child(2) > div > section > div.ipc-page-grid.ipc-page-grid--bias-left.ipc-page-grid__item.ipc-page-grid__item--span-2 > div.ipc-page-grid__item.ipc-page-grid__item--span-2 > ul"
-    link_movie = "#__next > main > div.ipc-page-content-container.ipc-page-content-container--center.sc-b8fa3fca-0.jxQzGK > div.ipc-page-content-container.ipc-page-content-container--center > section > section > div > section > section > div:nth-child(2) > div > section > div.ipc-page-grid.ipc-page-grid--bias-left.ipc-page-grid__item.ipc-page-grid__item--span-2 > div.ipc-page-grid__item.ipc-page-grid__item--span-2 > ul > li:nth-child(1) > div > div > div > div.sc-e2db8066-0.iXaKBq > div.sc-f30335b4-0.eefKuM > div.ipc-title.ipc-title--base.ipc-title--title.ipc-title-link-no-icon.ipc-title--on-textPrimary.sc-3713cfda-2.fSzZES.dli-title.with-margin > a"
+    link_movie = "a.ipc-title-link-wrapper"
     metadata_selector = "#__next > main > div > section.ipc-page-background.ipc-page-background--base.sc-75c84411-0.icfMdl > section > div:nth-child(5) > section > section > div.sc-9a2a0028-3.bwWOiy"
     genres_selector = "#__next > main > div > section.ipc-page-background.ipc-page-background--base.sc-75c84411-0.icfMdl > section > div:nth-child(5) > section > section > div.sc-9a2a0028-4.eeUUGv > div.sc-9a2a0028-6.zHrZh > div.sc-9a2a0028-10.iUfJXd > section > div.ipc-chip-list--baseAlt.ipc-chip-list.ipc-chip-list--nowrap.ipc-chip-list__page-right.sc-42125d72-4.iPHzA-d > div.ipc-chip-list__scroller"
     actors_selector = "#__next > main > div > section.ipc-page-background.ipc-page-background--base.sc-75c84411-0.icfMdl > div > section > div > div.sc-3e58c83b-1.cixVoM.ipc-page-grid__item.ipc-page-grid__item--span-2 > section.ipc-page-section.ipc-page-section--base.sc-cd7dc4b7-0.ycheS.title-cast.title-cast--tvseries.title-cast--with-eps.celwidget > div.ipc-shoveler.ipc-shoveler--base.ipc-shoveler--page0.title-cast__grid > div.ipc-sub-grid.ipc-sub-grid--page-span-2.ipc-sub-grid--wraps-at-above-l.ipc-shoveler__grid"
@@ -159,95 +159,19 @@ class FetchAllMovies:
 
     def _get_popularity(self, soup):
         popularity = 0
-        popularity_element = soup.select_one('div.sc-9a2a0028-1.iZlgcd')
+        popularity_element = soup.select_one('div[data-testid="hero-rating-bar__popularity__score"]')
         if popularity_element:
             popularity = int(popularity_element.text.strip().replace(',', ''))
         return popularity
 
     def _get_imdb_type(self, soup):
-        """
-        Determine the IMDb content type from the page
+        pass
 
-        Parameters:
-        - soup: BeautifulSoup object of the movie page
-
-        Returns:
-        - str: The IMDb content type ("movie", "tvSeries", etc.)
-        """
-        # Default to ""
-        imdb_type = ""
-
-        # Check for TV series indicators
-        if soup.select_one('button[aria-label="Seasons & Episodes"]') or 'TV Series' in soup.text:
-            imdb_type = "tvSeries"
-        elif 'TV Mini Series' in soup.text:
-            imdb_type = "tvMiniSeries"
-        elif 'TV Movie' in soup.text:
-            imdb_type = "tvMovie"
-        elif 'Episode' in soup.text and 'TV Episode' in soup.text:
-            imdb_type = "tvEpisode"
-
-        return imdb_type
-
-    def get_metadata(self, soup):
-        """
-        Extract all metadata from a movie page including year, type, runtime, rating, and votes
-
-        Parameters:
-        - soup: BeautifulSoup object of the movie page
-
-        Returns:
-        - tuple: (year, movie_type, runtime, end_year, rating, votes)
-        """
-
-        # Initialize variables
-        year = ""
-        runtime_text = ""
-        end_year = ""
-
-        # Extract title
-        title = self._get_title(soup)
-
-        popularity = self._get_popularity(soup)
-        imdb_type = self._get_imdb_type(soup)
-
-        # Get basic metadata from the metadata section
-        metadata_div = soup.select_one(self.metadata_selector)
-
-        if metadata_div:
-            # Try to find year
-            year_element = metadata_div.select_one('span.sc-9a2a0028-8.jLyRwP a')
-            if year_element:
-                year = year_element.text.strip()
-
-            # Try to find runtime
-            runtime_element = metadata_div.select_one('li.ipc-inline-list__item span:contains("h") span:contains("m")')
-            if not runtime_element:
-                runtime_element = metadata_div.select_one('span.sc-9a2a0028-8.jLyRwP')
-
-            if runtime_element:
-                runtime_text = runtime_element.text.strip()
-
-        # Handle series with date ranges
-        if '–' in year or '-' in year:
-            separator = '–' if '–' in year else '-'
-            date_parts = year.split(separator)
-            start_year = date_parts[0].strip()
-            end_year = date_parts[1].strip() if len(date_parts) > 1 and date_parts[1].strip() else ""
-            year = start_year
-
-        # Determine type
-        is_series = False
-        series_indicator = soup.select_one('button[aria-label="Seasons & Episodes"]')
-        if series_indicator or end_year or 'TV Series' in soup.text:
-            is_series = True
-
-        movie_type = "series" if is_series else "movie"
-
+    def get_runtime(self, runtime_text):
         # Process runtime
         runtime = Decimal("0.0")  # Default value
         if runtime_text:
-            # Handle formats like "2h 19m"
+            # Handle formats like "2h 17m"
             hours, minutes = 0, 0
             if 'h' in runtime_text:
                 hours_parts = runtime_text.split('h')
@@ -259,44 +183,112 @@ class FetchAllMovies:
 
             # Convert to total minutes
             runtime = Decimal(str(hours * 60 + minutes))
+        return runtime
 
-        # Extract rating and votes (formerly in separate _extract_rating method)
-        rating = Decimal("0.0")
-        votes = 0
+    def get_year(self, year):
+        end_year = ""
 
-        # Find the rating element
-        rating_element = soup.select_one('div[data-testid="hero-rating-bar__aggregate-rating"]')
+        # Handle series with date ranges
+        if '–' in year or '-' in year:
+            separator = '–' if '–' in year else '-'
+            date_parts = year.split(separator)
+            start_year = date_parts[0].strip()
+            end_year = date_parts[1].strip() if len(date_parts) > 1 and date_parts[1].strip() else ""
+            year = start_year
+        return end_year, year
 
-        if rating_element:
-            # Extract rating
-            rating_span = rating_element.select_one('span.sc-bde20123-1.iZlgcd')
-            if not rating_span:
-                rating_span = rating_element.select_one('span.sc-7ab21ed2-1.jGRxWM')
+    def get_rating(self, soup):
+        # Extract rating and votes (unchanged from your original code)
+        # Extract rating
+        rating_span = soup.select_one('span.sc-d541859f-1')
+        if rating_span:
+            rating = Decimal(rating_span.text.strip())
+        else:
+            rating = Decimal('0.0')
 
-            if rating_span:
-                try:
-                    rating = Decimal(rating_span.text.strip())
-                except:
-                    rating = Decimal("0.0")
+        # Extract votes
+        votes_span = soup.select_one('div.sc-d541859f-3')
+        if not votes_span:
+            return rating, 0
 
-            # Extract votes
-            votes_span = rating_element.select_one('div.sc-bde20123-3.gPVQBa')
-            if not votes_span:
-                votes_span = rating_element.select_one('span.sc-7ab21ed2-3.dPVcnq')
+        # Clean up the votes text
+        votes_text = votes_span.text.strip()
+        votes_text = votes_text.replace('(', '').replace(')', '')
+        votes_text = votes_text.replace('\xa0', '').replace(',', '')
 
-            if votes_span:
-                votes_text = votes_span.text.strip().replace('(', '').replace(')', '').replace('K', '000')
-                votes_text = votes_text.replace('\xa0', '').replace(',', '')  # Handle non-breaking spaces and commas
-                try:
-                    # Handle cases like "247K" by converting to "247000"
-                    if 'M' in votes_text:
-                        votes = int(float(votes_text.replace('M', '')) * 1000000)
-                    else:
-                        votes = int(votes_text)
-                except:
-                    votes = 0
+        # Handle different vote formats
+        if 'M' in votes_text:
+            # Convert millions (e.g., "1.2M" to 1200000)
+            votes = int(float(votes_text.replace('M', '')) * 1000000)
+        elif 'K' in votes_text:
+            # Convert thousands (e.g., "247K" to 247000)
+            votes = int(float(votes_text.replace('K', '')) * 1000)
+        else:
+            # Handle plain numbers, ensuring we're not trying to convert a rating
+            if '.' in votes_text:
+                # If it looks like a rating (has decimal), it's probably wrong data
+                raise ValueError(f"Unexpected decimal in votes count: {votes_text}")
+            votes = int(votes_text)
 
-        return title, year, movie_type, runtime, end_year, rating, votes, popularity, imdb_type
+        return rating, votes
+
+    def get_metadata(self, soup):
+        """
+        Extract all metadata from a movie page including title, year, runtime, end_year, rating, votes,
+        popularity, imdb_type, and audience rating
+
+        Parameters:
+        - soup: BeautifulSoup object of the movie page
+
+        Returns:
+        - tuple: (title, year, runtime, end_year, rating, votes, popularity, imdb_type, audience)
+        """
+        # Initialize variables
+        year = ""
+        runtime = Decimal("0.0")
+        end_year = ""
+        audience = ""
+        imdb_type = "movie"
+
+        # Extract title
+        title = self._get_title(soup)
+        popularity = self._get_popularity(soup)
+        serial = False
+
+        # Get basic metadata from the metadata section - updated selector for the new HTML structure
+        metadata_list = soup.select_one(self.metadata_selector)
+
+        list_items = metadata_list.select('li.ipc-inline-list__item')
+
+        for item in list_items:
+            item_text = item.text.strip()
+
+            # Check for TV Series/Movie identifier
+            if item_text in ["TV Series", "TV Mini Series", "TV Movie", "Episode", "TV Episode"]:
+                imdb_type = item_text.replace(" ", "")
+                serial = True
+                continue
+
+            # Check for year with link
+            year_link = item.select_one('a[href*="releaseinfo"]')
+            if year_link:
+                end_year, year = self.get_year(year_link.text.strip())
+                continue
+
+            # Check for runtime (doesn't have a link)
+            if 'h' in item_text or 'm' in item_text:
+                runtime = self.get_runtime(item_text)
+                continue
+
+            if serial:
+                # Check for audience rating with link to parental guide
+                audience_link = item.select_one('a[href*="parentalguide"]')
+                if audience_link:
+                    audience = audience_link.text.strip()
+                    continue
+
+        rating, votes = self.get_rating(soup)
+        return title, year, runtime, end_year, rating, votes, popularity, imdb_type, audience
 
     async def fetch_movie_details(self, movie_urls: List[str]) -> List[Movie]:
         """
@@ -326,42 +318,45 @@ class FetchAllMovies:
         for i, page_data in enumerate(pages_data):
             movie_url = movie_urls[i]
             movie_id = movie_url.split('/')[2]
+            try:
+                # Parse HTML
+                soup = BeautifulSoup(page_data, 'html.parser')
 
-            # Parse HTML
-            soup = BeautifulSoup(page_data['response'], 'html.parser')
+                # Get metadata
+                title, year, runtime, end_year, rating, votes, popularity, imdb_type, audience = self.get_metadata(soup)
 
-            # Get metadata
-            title, year, movie_type, runtime, end_year, rating, votes, popularity, imdb_type = self.get_metadata(soup)
+                # Get additional details
+                overview = self.get_overview(soup)
+                genres = self.get_genres(soup)
+                actors = self.get_actors(soup)
+                directors = self.get_directors(soup)
 
-            # Get additional details
-            overview = self.get_overview(soup)
-            genres = self.get_genres(soup)
-            actors = self.get_actors(soup)
-            directors = self.get_directors(soup)
+                # Create Movie object
+                movie = Movie(
+                    id=movie_id,
+                    title=Title(en=title),
+                    year=year,
+                    genres=genres,
+                    end_year=end_year,
+                    directors=directors,
+                    actors=actors,
+                    popularity=popularity,
+                    imdb_type=imdb_type,
+                    rating=rating,
+                    runtime=runtime,
+                    votes=votes,
+                    overview=overview,
+                    audience=audience
+                )
 
-            # Create Movie object
-            movie = Movie(
-                id=movie_id,
-                title=Title(en=title),
-                year=year,
-                genres=genres,
-                end_year=end_year,
-                directors=directors,
-                actors=actors,
-                type=movie_type,
-                popularity=popularity,
-                imdb_type=imdb_type,
-                rating=rating,
-                runtime=runtime,
-                votes=votes,
-                overview=overview,
-            )
-
-            movies.append(movie)
+                movies.append(movie)
+            except Exception as e:
+                print(f"Error processing movie page: {e}, movie_id: {movie_id}")
+                raise e
 
         return movies
 
-    async def _process_and_save_page(self, page_data: str, existing_ids: set) -> List[str]:
+    async def _collect_movies_urls(self, page_data: str, existing_ids: set) -> List[str]:
         """
         Process a page of search results and extract movie URLs
 
@@ -381,7 +376,7 @@ class FetchAllMovies:
             # Find movie items
             movie_elements = soup.select_one(self.items_selector)
 
-            for movie in movie_elements:
+            for movie in movie_elements.select('li'):
                 try:
                     # Extract movie link
                     link_element = movie.select_one(self.link_movie)
@@ -493,7 +488,7 @@ class FetchAllMovies:
             # Process each page in the batch to extract movie URLs
             for i, page_data in enumerate(pages_data):
                 page_num = page_numbers[i]
-                new_movie_urls = await self._process_and_save_page(page_data, existing_ids)
+                new_movie_urls = await self._collect_movies_urls(page_data, existing_ids)
                 all_new_movie_urls.extend(new_movie_urls)
 
                 print(f"Processed page {page_num}/{total_pages} - Found {len(new_movie_urls)} new movies")

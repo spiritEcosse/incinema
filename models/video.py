@@ -81,11 +81,11 @@ class Movie(MixinDynamoTable, DataClassJSONSerializer):
     title: Title
     year: str
     genres: List[str]
-    type: str
     popularity: int
     rating: Decimal
     runtime: Decimal
     votes: int
+    audience: Optional[str] = ""
     overview: Optional[str] = ""
     directors: List[str] = field(default_factory=list)
     actors: List[str] = field(default_factory=list)

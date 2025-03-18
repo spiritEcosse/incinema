@@ -14,7 +14,7 @@ from api.video_editor import make_trailer
 from http_client import HttpClient
 from models.initial_data import InitialData
 from models.video import Item
-from settings import BASE_DIR_MOVIES, HOST_API_TOKEN
+from settings import BASE_DIR_MOVIES, HOST_API_TOKEN, WORKERS
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -73,7 +73,7 @@ class GetMetaData:
         await self.do_set()
 
     def run_executions(self):
-        workers = min(32, len(self.items))
+        workers = min(WORKERS, len(self.items))
         with Pool(workers) as p:
             p.map(make_trailer, [item for item in self.items])
 
