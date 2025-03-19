@@ -20,9 +20,9 @@ class FetchAllMovies:
     items_selector = "#__next > main > div.ipc-page-content-container.ipc-page-content-container--center.sc-b8fa3fca-0.jxQzGK > div.ipc-page-content-container.ipc-page-content-container--center > section > section > div > section > section > div:nth-child(2) > div > section > div.ipc-page-grid.ipc-page-grid--bias-left.ipc-page-grid__item.ipc-page-grid__item--span-2 > div.ipc-page-grid__item.ipc-page-grid__item--span-2 > ul"
     link_movie = "a.ipc-title-link-wrapper"
     metadata_selector = "#__next > main > div > section.ipc-page-background.ipc-page-background--base.sc-75c84411-0.icfMdl > section > div:nth-child(5) > section > section > div.sc-9a2a0028-3.bwWOiy"
-    genres_selector = "#__next > main > div > section.ipc-page-background.ipc-page-background--base.sc-75c84411-0.icfMdl > section > div:nth-child(5) > section > section > div.sc-9a2a0028-4.eeUUGv > div.sc-9a2a0028-6.zHrZh > div.sc-9a2a0028-10.iUfJXd > section > div.ipc-chip-list--baseAlt.ipc-chip-list.ipc-chip-list--nowrap.ipc-chip-list__page-right.sc-42125d72-4.iPHzA-d > div.ipc-chip-list__scroller"
-    actors_selector = "#__next > main > div > section.ipc-page-background.ipc-page-background--base.sc-75c84411-0.icfMdl > div > section > div > div.sc-3e58c83b-1.cixVoM.ipc-page-grid__item.ipc-page-grid__item--span-2 > section.ipc-page-section.ipc-page-section--base.sc-cd7dc4b7-0.ycheS.title-cast.title-cast--tvseries.title-cast--with-eps.celwidget > div.ipc-shoveler.ipc-shoveler--base.ipc-shoveler--page0.title-cast__grid > div.ipc-sub-grid.ipc-sub-grid--page-span-2.ipc-sub-grid--wraps-at-above-l.ipc-shoveler__grid"
-    directors_selector = "#__next > main > div > section.ipc-page-background.ipc-page-background--base.sc-75c84411-0.icfMdl > div > section > div > div.sc-3e58c83b-1.cixVoM.ipc-page-grid__item.ipc-page-grid__item--span-2 > section.ipc-page-section.ipc-page-section--base.sc-cd7dc4b7-0.ycheS.title-cast.title-cast--tvseries.title-cast--with-eps.celwidget > ul > li:nth-child(1) > div > ul"
+    genres_selector = "#__next > main > div > section.ipc-page-background.ipc-page-background--base.sc-75c84411-0.icfMdl > section > div:nth-child(5) > section > section > div.sc-9a2a0028-4.eeUUGv > div.sc-9a2a0028-6.zHrZh > div.sc-9a2a0028-10.iUfJXd > section > div.ipc-chip-list--baseAlt.ipc-chip-list.ipc-chip-list--nowrap.sc-42125d72-4.iPHzA-d > div.ipc-chip-list__scroller"
+    actors_selector = ".ipc-sub-grid.ipc-sub-grid--page-span-2.ipc-sub-grid--wraps-at-above-l.ipc-shoveler__grid"
+    directors_selector = "#__next > main > div > section.ipc-page-background.ipc-page-background--base.sc-75c84411-0.icfMdl > section > div:nth-child(5) > section > section > div.sc-9a2a0028-4.eeUUGv > div.sc-9a2a0028-6.zHrZh > div.sc-9a2a0028-10.iUfJXd > section > div.sc-70a366cc-3.iwmAOx > div > ul > li:nth-child(1) > div > ul"
     overview_selector = "#__next > main > div > section.ipc-page-background.ipc-page-background--base.sc-75c84411-0.icfMdl > section > div:nth-child(5) > section > section > div.sc-9a2a0028-4.eeUUGv > div.sc-9a2a0028-6.zHrZh > div.sc-9a2a0028-10.iUfJXd > section > p"
 
     def __init__(self, start_page: int = 1, max_pages: Optional[int] = None, batch_size: int = 10):
@@ -77,16 +77,11 @@ class FetchAllMovies:
         Returns:
         - list: List of genre strings
         """
-        genres = []
-        genres_div = soup.select_one(self.genres_selector)
-
-        if genres_div:
-            genre_elements = genres_div.select('a.ipc-chip.ipc-chip--on-baseAlt')
-            for genre in genre_elements:
-                genre_text = genre.text.strip()
-                if genre_text:
-                    genres.append(genre_text)
-
+        div = soup.select_one(self.genres_selector)
+        genre_elements = div.select('a.ipc-chip--on-baseAlt')
+        genres = [genre.text.strip() for genre in genre_elements]
+        if not genres:
+            raise ValueError("No genres found")
         return genres
 
     def get_actors(self, soup) -> list:
@@ -99,27 +94,11 @@ class FetchAllMovies:
         Returns:
         - list: List of actor names
         """
-        actors = []
-        actors_div = soup.select_one(self.actors_selector)
-
-        if actors_div:
-            # Try different selectors for actor names
-            actor_elements = actors_div.select('div.sc-bfec09a1-5')
-
-            if not actor_elements:
-                # Try alternative selector
-                actor_elements = actors_div.select('div.ipc-sub-grid-item')
-
-            for actor_element in actor_elements:
-                name_element = actor_element.select_one('a[data-testid="title-cast-item__actor"]')
-                if name_element:
-                    actors.append(name_element.text.strip())
-                else:
-                    # Try alternative selector
-                    name_element = actor_element.select_one('a.ipc-metadata-list-item__list-content-item')
-                    if name_element:
-                        actors.append(name_element.text.strip())
-
+        div = soup.select_one(self.actors_selector)
+        elements = div.select('a[data-testid="title-cast-item__actor"]')
+        actors = [re.sub(r'\s+', ' ', element.text.replace('\n', '').strip()) for element in elements]
+        if not actors:
+            raise ValueError("No actors found")
         return actors
 
     def get_directors(self, soup) -> list:
@@ -132,40 +111,24 @@ class FetchAllMovies:
         Returns:
         - list: List of director names
         """
-        directors = []
-        directors_div = soup.select_one(self.directors_selector)
-
-        if directors_div:
-            director_elements = directors_div.select('a.ipc-metadata-list-item__list-content-item')
-            for director in director_elements:
-                directors.append(director.text.strip())
-
-        # If no directors found, try alternative approach
-        if not directors and soup.select_one('li.ipc-metadata-list__item:has(span:contains("Director"))'):
-            director_item = soup.select_one('li.ipc-metadata-list__item:has(span:contains("Director"))')
-            if director_item:
-                director_links = director_item.select('a')
-                for director in director_links:
-                    directors.append(director.text.strip())
-
+        div = soup.select_one(self.directors_selector)
+        elements = div.select('a.ipc-metadata-list-item__list-content-item')
+        directors = [re.sub(r'\s+', ' ', element.text.replace('\n', '').strip()) for element in elements]
+        if not directors:
+            raise ValueError("No directors found")
         return directors
 
     def _get_title(self, soup):
-        title = ""
         title_element = soup.select_one('h1[data-testid="hero__pageTitle"]')
-        if title_element:
-            title = title_element.text.strip()
+        title = title_element.text.strip()
+        if not title:
+            raise ValueError("No title found")
         return title
 
     def _get_popularity(self, soup):
-        popularity = 0
         popularity_element = soup.select_one('div[data-testid="hero-rating-bar__popularity__score"]')
-        if popularity_element:
-            popularity = int(popularity_element.text.strip().replace(',', ''))
+        popularity = int(popularity_element.text.strip().replace(',', ''))
         return popularity
-
-    def _get_imdb_type(self, soup):
-        pass
 
     def get_runtime(self, runtime_text):
         # Process runtime

@@ -38,8 +38,8 @@ async def upload_set(_set):
 async def retrieve_and_save_all_movies():
     # For testing, limit to 5 pages to avoid hitting rate limits
     start_page = 1
-    max_pages = 1
-    batch_size = 1
+    max_pages = 5
+    batch_size = 2
 
     total_new_movies = await FetchAllMovies(
         start_page=start_page,
