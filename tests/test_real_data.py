@@ -14,21 +14,22 @@ class TestDataReal(IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
         self.sets = [
-            'series2',
             'action',
             'mistery',
             'sci-fi',
             'survival',
             'series',
-            'action2',
             'comedy',
+            'action2',
+            'series2',
+            'sci-fi2',
         ]
         self._set = self.sets[-1]
 
     async def test_real_data_upload_set(self, *args):
         await gather_tasks(self.sets[-1:], upload_set)
 
-    async def test_real_data(self, *args):
+    async def test_transform_trailers(self, *args):
         data = BASE_DIR_SETS / self._set / f'{self._set}.json'
         await handler(data)
 

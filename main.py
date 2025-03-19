@@ -1,4 +1,3 @@
-import asyncio
 import glob
 import json
 import re
@@ -8,11 +7,6 @@ from api.fetch_all_movies import FetchAllMovies
 from api.get_meta_data import GetMetaData
 from clients.aws import AWSS3Client
 from settings import BASE_DIR_SETS, BUCKET_VIDEO
-
-
-async def gather_tasks(data: list, func):
-    tasks = [func(obj) for obj in data]
-    await asyncio.gather(*tasks)
 
 
 async def upload_set(_set):

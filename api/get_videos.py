@@ -21,11 +21,10 @@ class GetVideos:
 
     @staticmethod
     async def get_best_video(item, candidate_videos):
-        http_client = HttpClient.from_dict(
-            {"server": "www.googleapis.com", "urls": [
-                f"youtube/v3/videos?id={video.key}&part=contentDetails&key={YOUTUBE_API_KEY}"
-                for video in candidate_videos], 'json': True}
-        )
+        server = "www.googleapis.com"
+        urls = [f"youtube/v3/videos?id={video.key}&part=contentDetails&key={YOUTUBE_API_KEY}"
+                for video in candidate_videos]
+        http_client = HttpClient.from_dict({"server": server, "urls": urls, 'json': True})
         responses = await http_client.run()
 
         longest_video = None
@@ -34,6 +33,7 @@ class GetVideos:
         # For each candidate, get the actual duration
         for index, response in enumerate(responses):
             video = candidate_videos[index]
+            print(f"id: {item.id}, title: {item.title.en}, video: {video.key}")
             try:
                 # Extract duration in ISO 8601 format (PT1M30S = 1 minute 30 seconds)
                 if response.get('items') and len(response['items']) > 0:
@@ -80,6 +80,9 @@ class GetVideos:
                 if video.site == "YouTube" and video.size >= self.size and video.type == "Trailer"
             ]
 
+            if not candidate_videos:
+                raise RuntimeError(f"id: {item.id}, title: {item.title.en}, candidate_videos is empty : {box}")
+
             # Get the best video based on duration
             best_video = await self.get_best_video(item, candidate_videos)
 
@@ -89,4 +92,4 @@ class GetVideos:
                 item.video = Video(id=video_id, url=f'https://www.youtube.com/watch?v={video_id}')
             elif not (BASE_DIR_MOVIES / item.title_to_dir() / "original.mp4").is_file():
                 raise RuntimeError(
-                    f"id: {item.id}, title: {item.title.en}, (ID: {item.id}), no compatible URL found {box}")
+                    f"id: {item.id}, title: {item.title.en}, no compatible URL found {box}")
