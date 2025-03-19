@@ -3,8 +3,9 @@ from unittest.mock import patch
 
 import pytest
 
-from main import handler, gather_tasks, upload_set, retrieve_and_save_all_movies
+from main import handler, upload_set, retrieve_and_save_all_movies
 from settings import BASE_DIR_SETS
+from utils import gather_tasks
 
 
 @pytest.mark.skip(reason="This test is real data")
@@ -23,6 +24,7 @@ class TestDataReal(IsolatedAsyncioTestCase):
             'action2',
             'series2',
             'sci-fi2',
+            'animated',
         ]
         self._set = self.sets[-1]
 
