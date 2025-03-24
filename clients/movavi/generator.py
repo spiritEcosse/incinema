@@ -153,13 +153,13 @@ class MovaviProjectGenerator:
         file = self.add_object(
             File(file_id, video_path, filesize, file_ext, duration_frames, video_track_id, audio_track_id))
 
-        # Create Video track with detected properties or defaults
-        # For video track frame rate, use 24000/1001 as default (common in editing)
+        # Create Video track with detected properties
         video_track = self.add_object(
             VideoTrack(video_track_id, file_id, width, height,
-                       frame_rate_n=30000,  # Common editing frame rate
-                       frame_rate_d=1001,
-                       bitrate=int(video_bitrate * 0.6) if video_bitrate else 1286899))  # Estimate from total bitrate
+                       frame_rate_n=frame_rate_n,
+                       frame_rate_d=frame_rate_d,
+                       bitrate=video_bitrate,
+                       codec_id=metadata['video_codec_id']))
 
         # Create Audio track with detected properties
         audio_track = self.add_object(
@@ -168,7 +168,7 @@ class MovaviProjectGenerator:
                        audio_props['sample_rate'],
                        audio_props['sample_format'],
                        audio_bitrate,
-                       codec_id=audio_props['codec_id']))  # Match original XML
+                       codec_id=audio_props['codec_id']))
 
         # Create timeline tracks with exact settings from original XML
         self.add_object(TimelineTrack(

@@ -527,7 +527,7 @@ class VideoTrack(MovaviObject):
     """Class for VideoTrack object"""
 
     def __init__(self, object_id: int, file_id: int, width: int, height: int,
-                 frame_rate_n: int, frame_rate_d: int, bitrate: int):
+                 frame_rate_n: int, frame_rate_d: int, bitrate: int, codec_id: str):
         super().__init__(object_id, "VideoTrack")
         self.file_id = file_id
         self.width = width
@@ -536,7 +536,7 @@ class VideoTrack(MovaviObject):
         self.frame_rate_d = frame_rate_d
         self.aspect_x = 1
         self.aspect_y = 1
-        self.codec_id = "CODEC_ID_H264"
+        self.codec_id = codec_id
         self.bitrate = bitrate
         self.is_image = False
 
