@@ -37,14 +37,7 @@ class VideoEditor:
             os.chdir(self.abs_path)
             await self.download()
             await self.do_audio()
-            # await self.random_scenes()
-            # await self.cut_scenes()
-            # await self.do_concat()
-            # ########################################################################### await self.check_commercial_scene()
-            # ########################################################################### await self.check_commercial_scene_image()
-            # ###########################################################################  await self.do_caption()
             await self.add_audio()
-            # ###########################################################################  await self.add_background_audio()
             await self.upload_files()
         except Exception as e:
             logger.exception(e)
@@ -55,7 +48,7 @@ class VideoEditor:
             try:
                 subprocess.check_output(command, shell=True)
                 print(f"download : {self.original} from {self.item.video.url}")
-                self.re_random_scenes = True
+                self.re_add_audio = True
             except Exception as e:
                 print(f"Error downloading, dir: {self.dir}", command)
                 raise e
@@ -76,7 +69,7 @@ class VideoEditor:
             self.re_add_audio = True
 
     async def add_audio(self):
-        if (not os.path.isfile(self.final) or self.re_add_audio) and os.path.isfile(self.audio):
+        if not os.path.isfile(self.final) or self.re_add_audio:
             print(f"add_audio: {self.dir}")
             command = (
                 f"ffmpeg -y -i {self.original} -i {self.audio} "

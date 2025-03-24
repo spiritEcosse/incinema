@@ -18,13 +18,14 @@ class TestDataReal(IsolatedAsyncioTestCase):
             'action',
             'mistery',
             'sci-fi',
-            'survival',
-            'series',
             'comedy',
             'action2',
             'series2',
             'sci-fi2',
+            'adventure',
             'animated',
+            'series',
+            'survival',
         ]
         self._set = self.sets[-1]
 
@@ -34,6 +35,7 @@ class TestDataReal(IsolatedAsyncioTestCase):
     async def test_transform_trailers(self, *args):
         data = BASE_DIR_SETS / self._set / f'{self._set}.json'
         await handler(data)
+        await gather_tasks(self.sets[-1:], upload_set)
 
     async def test_retrieve_and_save_all_movies(self, *args):
         await retrieve_and_save_all_movies()
