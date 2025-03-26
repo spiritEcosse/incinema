@@ -1,470 +1,484 @@
-import re
+import asyncio
+import json
+import urllib.parse
 from decimal import Decimal
-from typing import Optional, Dict, List
-
-import math
-from bs4 import BeautifulSoup
+from typing import List, Dict, Optional
 
 from http_client import HttpClient
 from models.video import Movie, Title
 
 
-class FetchAllMovies:
-    # url = "search/title/?title_type=feature&sort=moviemeter,asc&start={}&ref_=adv_nxt"
-    url = "search/title/?title_type=tv_movie,tv_miniseries,tv_episode,tv_series,feature&sort=moviemeter,asc&start={}&ref_=adv_nxt"
-    host = "www.imdb.com"
+class ImdbGraphQLScraper:
+    """
+    Scrape IMDb using GraphQL API with async HttpClient and update existing records
+    """
+    host = "caching.graphql.imdb.com"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9'}
-    pages_selector = "#__next > main > div.ipc-page-content-container.ipc-page-content-container--center.sc-b8fa3fca-0.jxQzGK > div.ipc-page-content-container.ipc-page-content-container--center > section > section > div > section > section > div:nth-child(2) > div > section > div.ipc-page-grid.ipc-page-grid--bias-left.ipc-page-grid__item.ipc-page-grid__item--span-2 > div.ipc-page-grid__item.ipc-page-grid__item--span-2 > div.sc-13add9d7-6.dCCeCI > div.sc-13add9d7-3.fwjHEn"
-    items_selector = "#__next > main > div.ipc-page-content-container.ipc-page-content-container--center.sc-b8fa3fca-0.jxQzGK > div.ipc-page-content-container.ipc-page-content-container--center > section > section > div > section > section > div:nth-child(2) > div > section > div.ipc-page-grid.ipc-page-grid--bias-left.ipc-page-grid__item.ipc-page-grid__item--span-2 > div.ipc-page-grid__item.ipc-page-grid__item--span-2 > ul"
-    link_movie = "a.ipc-title-link-wrapper"
-    metadata_selector = "#__next > main > div > section.ipc-page-background.ipc-page-background--base.sc-75c84411-0.icfMdl > section > div:nth-child(5) > section > section > div.sc-9a2a0028-3.bwWOiy"
-    genres_selector = "#__next > main > div > section.ipc-page-background.ipc-page-background--base.sc-75c84411-0.icfMdl > section > div:nth-child(5) > section > section > div.sc-9a2a0028-4.eeUUGv > div.sc-9a2a0028-6.zHrZh > div.sc-9a2a0028-10.iUfJXd > section > div.ipc-chip-list--baseAlt.ipc-chip-list.ipc-chip-list--nowrap.sc-42125d72-4.iPHzA-d > div.ipc-chip-list__scroller"
-    actors_selector = ".ipc-sub-grid.ipc-sub-grid--page-span-2.ipc-sub-grid--wraps-at-above-l.ipc-shoveler__grid"
-    directors_selector = "#__next > main > div > section.ipc-page-background.ipc-page-background--base.sc-75c84411-0.icfMdl > section > div:nth-child(5) > section > section > div.sc-9a2a0028-4.eeUUGv > div.sc-9a2a0028-6.zHrZh > div.sc-9a2a0028-10.iUfJXd > section > div.sc-70a366cc-3.iwmAOx > div > ul > li:nth-child(1) > div > ul"
-    overview_selector = "#__next > main > div > section.ipc-page-background.ipc-page-background--base.sc-75c84411-0.icfMdl > section > div:nth-child(5) > section > section > div.sc-9a2a0028-4.eeUUGv > div.sc-9a2a0028-6.zHrZh > div.sc-9a2a0028-10.iUfJXd > section > p"
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Content-Type': 'application/json'
+    }
 
-    def __init__(self, start_page: int = 1, max_pages: Optional[int] = None, batch_size: int = 10):
+    def __init__(self, start_page: int = 1, max_pages: Optional[int] = None, batch_size: int = 5,
+                 results_per_page: int = 50, update_existing: bool = True):
         """
-        Initialize the FetchAllMovies class with pagination parameters
+        Initialize the IMDb GraphQL scraper
 
         Parameters:
         - start_page: Page to start fetching from (default: 1)
-        - max_pages: Optional limit on number of pages to fetch
+        - max_pages: Optional limit on number of pages to fetch (default: None, which means fetch all available pages)
         - batch_size: Number of pages to process in each batch
+        - results_per_page: Number of results per page (default: 50)
+        - update_existing: Whether to update existing movie records (default: True)
         """
         self.start_page = start_page
         self.max_pages = max_pages
         self.batch_size = batch_size
+        self.results_per_page = results_per_page
+        self.update_existing = update_existing
 
-    def get_overview(self, soup) -> str:
+    def _generate_query_url(self, after_token: Optional[str] = None, first: int = 50,
+                            language: str = "en-US", sort_by: str = "POPULARITY",
+                            sort_order: str = "ASC") -> str:
         """
-        Extract the movie/series overview from the page
+        Generate the GraphQL query URL with parameters
 
         Parameters:
-        - soup: BeautifulSoup object of the movie page
+        - after_token: Pagination token for next page
+        - first: Number of results per page
+        - language: Language code
+        - sort_by: Sort field
+        - sort_order: Sort direction
 
         Returns:
-        - str: Overview text
+        - Full GraphQL query URL
         """
-        # Try to find the overview in the metadata section using your selector
-        metadata_div = soup.select_one(self.overview_selector)
-        if metadata_div:
-            overview_element = metadata_div.select_one('span[data-testid="plot-xl"]')
-            if overview_element:
-                return overview_element.text.strip()
+        variables = {
+            "after": after_token,
+            "first": first,
+            "locale": language,
+            "sortBy": sort_by,
+            "sortOrder": sort_order,
+            "titleTypeConstraint": {
+                "anyTitleTypeIds": ["tvMovie", "tvMiniSeries", "tvEpisode", "tvSeries", "movie"],
+                "excludeTitleTypeIds": []
+            }
+        }
 
-        # Fallback to other common selectors
-        overview_element = soup.select_one('span[data-testid="plot-xl"]')
-        if overview_element:
-            return overview_element.text.strip()
+        encoded_variables = urllib.parse.quote(json.dumps(variables))
+        extensions = json.dumps({
+            "persistedQuery": {
+                "sha256Hash": "6842af47c3f1c43431ae23d394f3aa05ab840146b146a2666d4aa0dc346dc482",
+                "version": 1
+            }
+        })
 
-        # Another fallback
-        overview_element = soup.select_one('div.sc-9a2a0028-3.bwWOiy span.sc-466bb6c-0')
-        if overview_element:
-            return overview_element.text.strip()
+        return f"/?operationName=AdvancedTitleSearch&variables={encoded_variables}&extensions={urllib.parse.quote(extensions)}"
 
-        return ""
-
-    def get_genres(self, soup) -> list:
+    def _extract_movie_data(self, data: Dict) -> List[Dict]:
         """
-        Extract the genres for the movie/series
+        Extract movie details from GraphQL response
 
         Parameters:
-        - soup: BeautifulSoup object of the movie page
+        - data: JSON response from GraphQL API
 
         Returns:
-        - list: List of genre strings
+        - List of movie data dictionaries
         """
-        div = soup.select_one(self.genres_selector)
-        genre_elements = div.select('a.ipc-chip--on-baseAlt')
-        genres = [genre.text.strip() for genre in genre_elements]
-        if not genres:
-            raise ValueError("No genres found")
-        return genres
+        movies_data = []
 
-    def get_actors(self, soup) -> list:
+        edges = data.get("data", {}).get("advancedTitleSearch", {}).get("edges", [])
+
+        for edge in edges:
+            title_data = edge.get("node", {}).get("title", {})
+
+            # Extract runtime in seconds
+            runtime = Decimal("0.0")  # Default value
+            runtime_data = title_data.get("runtime")
+            if runtime_data is not None:
+                runtime_seconds = runtime_data.get("seconds")
+                if runtime_seconds is not None:
+                    runtime = Decimal(str(runtime_seconds))
+
+            # Extract release year and end year
+            release_year_data = title_data.get("releaseYear", {})
+            year = str(release_year_data.get("year", "")) if release_year_data else ""
+            end_year = str(release_year_data.get("endYear", "")) if release_year_data else ""
+            # If end_year is the same as year or empty, set it to empty
+            if end_year == year:
+                end_year = ""
+
+            # Extract IMDb type
+            imdb_type = title_data.get("titleType", {}).get("text", "movie")
+
+            # Extract rating and votes
+            rating = Decimal(str(title_data.get("ratingsSummary", {}).get("aggregateRating", 0) or 0))
+            votes = title_data.get("ratingsSummary", {}).get("voteCount", 0)
+
+            # Extract audience rating
+            certificate = title_data.get("certificate", {})
+            audience = certificate.get("rating", "") if certificate else ""
+
+            # Extract genres
+            title_genres = title_data.get("titleGenres", {})
+            genres = [g["genre"]["text"] for g in
+                      title_data.get("titleGenres", {}).get("genres", [])] if title_genres else []
+
+            # Extract actors
+            actors = []
+            cast = title_data.get("principalCast", [])
+            for cast_member in cast:
+                for credit in cast_member.get("credits", []):
+                    if credit.get("category", {}).get("text", "") == "actor":
+                        name = credit.get("name", {}).get("nameText", {}).get("text", "")
+                        if name:
+                            actors.append(name)
+
+            # Extract directors
+            directors = []
+            # Try extracting from principalCrew first
+            crew = title_data.get("principalCrew", [])
+            for category in crew:
+                if category.get("category", {}).get("text", "") == "director":
+                    for credit in category.get("credits", []):
+                        name = credit.get("name", {}).get("nameText", {}).get("text", "")
+                        if name:
+                            directors.append(name)
+
+            # Alternative method if principal crew doesn't have directors
+            if not directors:
+                crew_credits = title_data.get("credits", {}).get("crew", [])
+                for credit in crew_credits:
+                    if credit.get("category", {}).get("text", "") == "Director":
+                        name = credit.get("name", {}).get("nameText", {}).get("text", "")
+                        if name:
+                            directors.append(name)
+
+            # Another alternative using director field
+            if not directors:
+                director = title_data.get("director", {})
+                if director:
+                    name = director.get("name", {}).get("nameText", {}).get("text", "")
+                    if name:
+                        directors.append(name)
+
+            # Extract production status
+            production_status_data = title_data.get("productionStatus") or {}
+            current_stage = production_status_data.get("currentProductionStage") or {}
+            production_status = current_stage.get("id", "")
+
+            # Extract overview/plot
+            plot = title_data.get("plot", {}) or {}
+            plot_text = plot.get("plotText", {}) or {}
+            overview = plot_text.get("plainText", "") if plot_text else ""
+
+            # Create movie data dictionary
+            movie = {
+                "id": title_data.get("id", ""),
+                "title": title_data.get("titleText", {}).get("text", ""),
+                "year": year,
+                "end_year": end_year,
+                "runtime": runtime,
+                "imdb_type": imdb_type,
+                "rating": rating,
+                "votes": votes,
+                "popularity": title_data.get("meterRanking", {}).get("currentRank", 0),
+                "overview": overview,
+                "genres": genres,
+                "actors": actors,
+                "directors": directors,
+                "production_status": production_status,
+                "audience": audience
+            }
+
+            movies_data.append(movie)
+
+        return movies_data
+
+    async def _fetch_page(self, after_token: Optional[str] = None) -> Dict:
         """
-        Extract the main actors from the movie/series page
+        Fetch a single page using HttpClient
 
         Parameters:
-        - soup: BeautifulSoup object of the movie page
+        - after_token: Pagination token
 
         Returns:
-        - list: List of actor names
+        - JSON response from GraphQL API
         """
-        div = soup.select_one(self.actors_selector)
-        elements = div.select('a[data-testid="title-cast-item__actor"]')
-        actors = [re.sub(r'\s+', ' ', element.text.replace('\n', '').strip()) for element in elements]
-        if not actors:
-            raise ValueError("No actors found")
-        return actors
+        url = self._generate_query_url(after_token, first=self.results_per_page)
+        client = HttpClient.from_dict({
+            "server": self.host,
+            "urls": [url],
+            'headers': self.headers,
+            'sleep': True,
+            'json': True
+        })
 
-    def get_directors(self, soup) -> list:
+        result = await client.run()
+        return result[0]
+
+    async def _convert_to_movie_objects(self, movies_data: List[Dict]) -> List[Movie]:
         """
-        Extract the directors from the movie/series page
+        Convert dictionaries to Movie objects
 
         Parameters:
-        - soup: BeautifulSoup object of the movie page
-
-        Returns:
-        - list: List of director names
-        """
-        div = soup.select_one(self.directors_selector)
-        elements = div.select('a.ipc-metadata-list-item__list-content-item')
-        directors = [re.sub(r'\s+', ' ', element.text.replace('\n', '').strip()) for element in elements]
-        if not directors:
-            raise ValueError("No directors found")
-        return directors
-
-    def _get_title(self, soup):
-        title_element = soup.select_one('h1[data-testid="hero__pageTitle"]')
-        title = title_element.text.strip()
-        if not title:
-            raise ValueError("No title found")
-        return title
-
-    def _get_popularity(self, soup):
-        popularity_element = soup.select_one('div[data-testid="hero-rating-bar__popularity__score"]')
-        popularity = int(popularity_element.text.strip().replace(',', ''))
-        return popularity
-
-    def get_runtime(self, runtime_text):
-        # Process runtime
-        runtime = Decimal("0.0")  # Default value
-        if runtime_text:
-            # Handle formats like "2h 17m"
-            hours, minutes = 0, 0
-            if 'h' in runtime_text:
-                hours_parts = runtime_text.split('h')
-                hours = int(hours_parts[0].strip())
-                if 'm' in hours_parts[1]:
-                    minutes = int(hours_parts[1].split('m')[0].strip())
-            elif 'm' in runtime_text:
-                minutes = int(runtime_text.split('m')[0].strip())
-
-            # Convert to total minutes
-            runtime = Decimal(str(hours * 60 + minutes))
-        return runtime
-
-    def get_year(self, year):
-        end_year = ""
-
-        # Handle series with date ranges
-        if '–' in year or '-' in year:
-            separator = '–' if '–' in year else '-'
-            date_parts = year.split(separator)
-            start_year = date_parts[0].strip()
-            end_year = date_parts[1].strip() if len(date_parts) > 1 and date_parts[1].strip() else ""
-            year = start_year
-        return end_year, year
-
-    def get_rating(self, soup):
-        # Extract rating and votes (unchanged from your original code)
-        # Extract rating
-        rating_span = soup.select_one('span.sc-d541859f-1')
-        if rating_span:
-            rating = Decimal(rating_span.text.strip())
-        else:
-            rating = Decimal('0.0')
-
-        # Extract votes
-        votes_span = soup.select_one('div.sc-d541859f-3')
-        if not votes_span:
-            return rating, 0
-
-        # Clean up the votes text
-        votes_text = votes_span.text.strip()
-        votes_text = votes_text.replace('(', '').replace(')', '')
-        votes_text = votes_text.replace('\xa0', '').replace(',', '')
-
-        # Handle different vote formats
-        if 'M' in votes_text:
-            # Convert millions (e.g., "1.2M" to 1200000)
-            votes = int(float(votes_text.replace('M', '')) * 1000000)
-        elif 'K' in votes_text:
-            # Convert thousands (e.g., "247K" to 247000)
-            votes = int(float(votes_text.replace('K', '')) * 1000)
-        else:
-            # Handle plain numbers, ensuring we're not trying to convert a rating
-            if '.' in votes_text:
-                # If it looks like a rating (has decimal), it's probably wrong data
-                raise ValueError(f"Unexpected decimal in votes count: {votes_text}")
-            votes = int(votes_text)
-
-        return rating, votes
-
-    def get_metadata(self, soup):
-        """
-        Extract all metadata from a movie page including title, year, runtime, end_year, rating, votes,
-        popularity, imdb_type, and audience rating
-
-        Parameters:
-        - soup: BeautifulSoup object of the movie page
-
-        Returns:
-        - tuple: (title, year, runtime, end_year, rating, votes, popularity, imdb_type, audience)
-        """
-        # Initialize variables
-        year = ""
-        runtime = Decimal("0.0")
-        end_year = ""
-        audience = ""
-        imdb_type = "movie"
-
-        # Extract title
-        title = self._get_title(soup)
-        popularity = self._get_popularity(soup)
-        serial = False
-
-        # Get basic metadata from the metadata section - updated selector for the new HTML structure
-        metadata_list = soup.select_one(self.metadata_selector)
-
-        list_items = metadata_list.select('li.ipc-inline-list__item')
-
-        for item in list_items:
-            item_text = item.text.strip()
-
-            # Check for TV Series/Movie identifier
-            if item_text in ["TV Series", "TV Mini Series", "TV Movie", "Episode", "TV Episode"]:
-                imdb_type = item_text.replace(" ", "")
-                serial = True
-                continue
-
-            # Check for year with link
-            year_link = item.select_one('a[href*="releaseinfo"]')
-            if year_link:
-                end_year, year = self.get_year(year_link.text.strip())
-                continue
-
-            # Check for runtime (doesn't have a link)
-            if 'h' in item_text or 'm' in item_text:
-                runtime = self.get_runtime(item_text)
-                continue
-
-            if serial:
-                # Check for audience rating with link to parental guide
-                audience_link = item.select_one('a[href*="parentalguide"]')
-                if audience_link:
-                    audience = audience_link.text.strip()
-                    continue
-
-        rating, votes = self.get_rating(soup)
-        return title, year, runtime, end_year, rating, votes, popularity, imdb_type, audience
-
-    async def fetch_movie_details(self, movie_urls: List[str]) -> List[Movie]:
-        """
-        Fetch detailed information about movies from their URLs
-
-        Parameters:
-        - movie_urls: List of movie URLs
+        - movies_data: List of movie data dictionaries
 
         Returns:
         - List of Movie objects
         """
-
-        # Create client for this batch
-        client = HttpClient.from_dict({
-            "server": self.host,
-            "urls": movie_urls,
-            'headers': self.headers,
-            'sleep': True,
-            'json': False
-        })
-
-        # Make all requests
-        pages_data = await client.run()
-
-        # Process each movie page
         movies = []
-        for i, page_data in enumerate(pages_data):
-            movie_url = movie_urls[i]
-            movie_id = movie_url.split('/')[2]
-            try:
-                # Parse HTML
-                soup = BeautifulSoup(page_data, 'html.parser')
 
-                # Get metadata
-                title, year, runtime, end_year, rating, votes, popularity, imdb_type, audience = self.get_metadata(soup)
+        for data in movies_data:
+            movie = Movie(
+                id=data["id"],
+                title=Title(en=data["title"]),
+                year=data["year"],
+                genres=data["genres"],
+                end_year=data["end_year"],
+                directors=data["directors"],
+                actors=data["actors"],
+                popularity=data["popularity"],
+                imdb_type=data["imdb_type"],
+                rating=data["rating"],
+                runtime=data["runtime"],
+                votes=data["votes"],
+                overview=data["overview"],
+                audience=data["audience"],
+                production_status=data["production_status"]
+            )
 
-                # Get additional details
-                overview = self.get_overview(soup)
-                genres = self.get_genres(soup)
-                actors = self.get_actors(soup)
-                directors = self.get_directors(soup)
-
-                # Create Movie object
-                movie = Movie(
-                    id=movie_id,
-                    title=Title(en=title),
-                    year=year,
-                    genres=genres,
-                    end_year=end_year,
-                    directors=directors,
-                    actors=actors,
-                    popularity=popularity,
-                    imdb_type=imdb_type,
-                    rating=rating,
-                    runtime=runtime,
-                    votes=votes,
-                    overview=overview,
-                    audience=audience
-                )
-
-                movies.append(movie)
-            except Exception as e:
-                print(f"Error processing movie page: {e}, movie_id: {movie_id}")
-                raise e
+            movies.append(movie)
 
         return movies
 
-    async def _collect_movies_urls(self, page_data: str, existing_ids: set) -> List[str]:
+    async def _get_existing_movie(self, movie_id: str) -> Optional[Movie]:
         """
-        Process a page of search results and extract movie URLs
+        Get an existing movie from DynamoDB by ID
 
         Parameters:
-        - page_data: Raw HTML data from the search results page
-        - existing_ids: Set of existing movie IDs to avoid duplicates
+        - movie_id: The IMDb ID of the movie
 
         Returns:
-        - List of movie URLs that haven't been processed yet
+        - Movie object if found, None otherwise
         """
-        new_movie_urls = []
+        movie_data = await Movie.get_by_id(movie_id)
+        if not movie_data:
+            return None
 
+        # Convert dictionary to Movie object
+        return Movie.from_dict(movie_data)
+
+    async def _should_update_movie(self, existing_movie: Movie, new_movie_data: Dict) -> bool:
+        """
+        Determine if the existing movie should be updated based on changes
+
+        Parameters:
+        - existing_movie: Existing Movie object from database
+        - new_movie_data: New movie data from API
+
+        Returns:
+        - True if movie should be updated, False otherwise
+        """
+        # Compare important fields to see if an update is needed
+        if (existing_movie.rating != Decimal(str(new_movie_data["rating"])) or
+                existing_movie.votes != new_movie_data["votes"] or
+                existing_movie.popularity != new_movie_data["popularity"] or
+                existing_movie.production_status != new_movie_data["production_status"] or
+                existing_movie.overview != new_movie_data["overview"] or
+                set(existing_movie.genres) != set(new_movie_data["genres"]) or
+                set(existing_movie.directors) != set(new_movie_data["directors"]) or
+                set(existing_movie.actors) != set(new_movie_data["actors"])):
+            return True
+
+        return False
+
+    async def _process_and_save_page(self, page_data: Dict, existing_ids: set, current_page: int) -> Dict:
+        """
+        Process and save a single page of movies
+
+        Parameters:
+        - page_data: Raw page data from GraphQL API
+        - existing_ids: Set of existing movie IDs
+        - current_page: Current page number for logging
+
+        Returns:
+        - Dictionary with counts of new and updated movies
+        """
+        # Extract movie data
+        movies_data = self._extract_movie_data(page_data)
+
+        # Initialize counters
+        new_movie_data = []
+        updated_movie_data = []
+        existing_movie_ids = []
+        updated_ids = []
+
+        # Process each movie
+        for movie in movies_data:
+            movie_id = movie["id"]
+
+            if movie_id in existing_ids:
+                existing_movie_ids.append(movie_id)
+
+                if self.update_existing:
+                    # Get existing movie
+                    existing_movie = await self._get_existing_movie(movie_id)
+
+                    if existing_movie and await self._should_update_movie(existing_movie, movie):
+                        updated_movie_data.append(movie)
+                        updated_ids.append(movie_id)
+            else:
+                new_movie_data.append(movie)
+                existing_ids.add(movie_id)
+
+        print(
+            f"Processed page {current_page} - Found {len(movies_data)} movies, {len(new_movie_data)} new, {len(updated_movie_data)} to update")
+
+        results = {
+            "new": 0,
+            "updated": 0
+        }
+
+        # Process new movies
+        if new_movie_data:
+            try:
+                # Convert to Movie objects and save
+                new_movie_objects = await self._convert_to_movie_objects(new_movie_data)
+                await Movie.save(new_movie_objects)
+                print(f"Saved {len(new_movie_objects)} new movies from page {current_page}")
+                results["new"] = len(new_movie_objects)
+            except Exception as e:
+                print(f"Error saving new movies from page {current_page}: {e}")
+
+        # Process updated movies
+        if updated_movie_data:
+            try:
+                # Convert to Movie objects and save (will overwrite existing)
+                updated_movie_objects = await self._convert_to_movie_objects(updated_movie_data)
+                await Movie.save(updated_movie_objects)
+                print(f"Updated {len(updated_movie_objects)} existing movies from page {current_page}")
+                results["updated"] = len(updated_movie_objects)
+            except Exception as e:
+                print(f"Error updating movies from page {current_page}: {e}")
+
+        return results
+
+    async def fetch_all_movies(self) -> Dict:
+        """
+        Fetch all movies using pagination, saving and updating each page individually
+        Will continue until all pages are fetched or max_pages limit is reached
+
+        Returns:
+        - Dictionary with counts of total new and updated movies
+        """
+        results = {
+            "total_new": 0,
+            "total_updated": 0,
+            "pages_processed": 0
+        }
+
+        after_token = None  # First page has no token
+        has_next_page = True
+
+        # Get existing movie IDs
+        existing_ids = set()
         try:
-            # Parse HTML
-            soup = BeautifulSoup(page_data, 'html.parser')
+            all_movies = await Movie.scan_all()
+            existing_ids = {movie.id for movie in all_movies}
+            print(f"Found {len(existing_ids)} existing movies in the database")
+        except Exception as e:
+            print(f"Error getting existing movies: {e}")
+            print("Continuing with empty existing IDs set")
 
-            # Find movie items
-            movie_elements = soup.select_one(self.items_selector)
+        # Skip to start page if needed
+        if self.start_page > 1:
+            print(f"Skipping to page {self.start_page}...")
+            current_page = 1
 
-            for movie in movie_elements.select('li'):
+            while current_page < self.start_page and has_next_page:
                 try:
-                    # Extract movie link
-                    link_element = movie.select_one(self.link_movie)
-                    if not link_element:
-                        continue
+                    data = await self._fetch_page(after_token)
 
-                    movie_url = link_element.get('href', '')
-                    if not movie_url or not movie_url.startswith('/title/'):
-                        raise ValueError(f"Invalid movie URL: {movie}")
+                    # Get next page token
+                    page_info = data.get("data", {}).get("advancedTitleSearch", {}).get("pageInfo", {})
+                    has_next_page = page_info.get("hasNextPage", False)
+                    after_token = page_info.get("endCursor")
 
-                    # Get movie ID
-                    movie_id = movie_url.split('/')[2]
+                    if not has_next_page:
+                        print(
+                            f"Reached end of results at page {current_page}, unable to start at page {self.start_page}")
+                        return results
 
-                    # Skip if we already have this movie
-                    if movie_id in existing_ids:
-                        continue
-
-                    # Add to new movie URLs list
-                    new_movie_urls.append(movie_url)
+                    print(f"Skipped page {current_page}")
+                    current_page += 1
 
                 except Exception as e:
-                    print(f"Error extracting movie URL: {movie}")
-                    raise e
+                    print(f"Error skipping to page {current_page}: {e}")
+                    return results
 
-        except Exception as e:
-            print(f"Error processing page: {e}")
-            raise e
-
-        return new_movie_urls
-
-    async def _get_total_pages(self) -> int:
-        """Get the total number of pages available"""
-        # Create a client for the first page request
-        client = HttpClient.from_dict(
-            {"server": self.host, "urls": [self.url.format(1)], 'headers': self.headers, 'sleep': True,
-             'json': False}
-        )
-
-        # Make the request
-        results = await client.run()
-        soup = BeautifulSoup(results[0], "html.parser")
-
-        # Find total results www.imdb.com
-        total_results_text = soup.select_one(self.pages_selector).text  # Example: "1-50 of 3,456"
-
-        # Extract total results using regex
-        match = re.search(r'of ([0-9,]+)', total_results_text)
-        if match:
-            total_results = int(match.group(1).replace(',', ''))
-            results_per_page = 50  # IMDb usually shows 50 results per page
-            total_pages = math.ceil(total_results / results_per_page)
-            print(f"Total Titles: {total_results}")
-            print(f"Total Pages: {total_pages}")
+            print(f"Starting from page {self.start_page}")
         else:
-            raise RuntimeError(f"Unable to parse total results from {total_results_text}")
-        return total_pages
+            current_page = 1
 
-    async def _fetch_pages_batch(self, page_numbers: List[int]) -> List[Dict]:
-        """Fetch a batch of pages using HttpClient"""
-        # Construct URLs for all pages in this batch
-        # IMDb uses a different pagination style - each page shows 50 results
-        urls = [self.url.format((page - 1) * 50 + 1) for page in page_numbers]
+        # Process all available pages or up to max_pages
+        while has_next_page:
+            try:
+                # Check if we've reached max_pages
+                if self.max_pages is not None and results["pages_processed"] >= self.max_pages:
+                    print(f"Reached max_pages limit ({self.max_pages})")
+                    break
 
-        # Create client for this batch
-        client = HttpClient.from_dict(
-            {"server": self.host, "urls": urls, 'headers': self.headers, 'sleep': True, 'json': False})
+                # Fetch current page
+                data = await self._fetch_page(after_token)
 
-        # Make all requests
-        return await client.run()
+                # Process and save this page
+                page_results = await self._process_and_save_page(data, existing_ids, current_page)
+                results["total_new"] += page_results["new"]
+                results["total_updated"] += page_results["updated"]
+                results["pages_processed"] += 1
 
-    async def fetch_all_movies(self) -> int:
-        """
-        Fetch all movies using pagination, saving each batch to database
+                # Check for next page
+                page_info = data.get("data", {}).get("advancedTitleSearch", {}).get("pageInfo", {})
+                has_next_page = page_info.get("hasNextPage", False)
+                after_token = page_info.get("endCursor")
 
-        Returns:
-        - Total number of new movies saved
-        """
-        total_new_movies = 0
+                if not has_next_page:
+                    print("Reached end of all available results.")
+                    break
 
-        # Get existing movie IDs to avoid duplicates
-        existing_ids = await Movie.get_existing_ids()
-        print(f"Found {len(existing_ids)} existing movies in the database")
+                current_page += 1
 
-        # Get total pages
-        total_pages = await self._get_total_pages()
+            except Exception as e:
+                print(f"Error processing page {current_page}: {e}")
+                # Try to continue with the next page if possible
+                if after_token:
+                    current_page += 1
+                    continue
+                else:
+                    break
 
-        # Determine end page
-        end_page = min(total_pages, self.start_page + self.max_pages - 1) if self.max_pages else total_pages
+        print(f"Total pages processed: {results['pages_processed']}")
+        print(f"Total new movies added: {results['total_new']}")
+        print(f"Total movies updated: {results['total_updated']}")
+        return results
 
-        # Adjust start page if it's out of range
-        if self.start_page > total_pages:
-            print(f"Start page {self.start_page} exceeds total pages {total_pages}. Exiting.")
-            return 0
 
-        print(f"Will process pages {self.start_page} through {end_page}")
+# Example usage
+if __name__ == "__main__":
+    async def run():
+        # To get all available pages, set max_pages to None
+        # To limit to a specific number of pages, set max_pages to that number
+        scraper = ImdbGraphQLScraper(
+            start_page=1,  # Which page to start on
+            max_pages=None,  # How many pages to process (None = all)
+            batch_size=1,  # How many pages to process in one batch
+            update_existing=True  # Whether to update existing movie records
+        )
+        total_movies = await scraper.fetch_all_movies()
+        print(f"Total new movies added: {total_movies}")
 
-        # Process pages in batches
-        all_new_movie_urls = []
 
-        for batch_start in range(self.start_page, end_page + 1, self.batch_size):
-            batch_end = min(batch_start + self.batch_size - 1, end_page)
-            page_numbers = list(range(batch_start, batch_end + 1))
-
-            print(f"Fetching pages {batch_start} to {batch_end}...")
-
-            # Fetch batch of pages
-            pages_data = await self._fetch_pages_batch(page_numbers)
-
-            # Process each page in the batch to extract movie URLs
-            for i, page_data in enumerate(pages_data):
-                page_num = page_numbers[i]
-                new_movie_urls = await self._collect_movies_urls(page_data, existing_ids)
-                all_new_movie_urls.extend(new_movie_urls)
-
-                print(f"Processed page {page_num}/{total_pages} - Found {len(new_movie_urls)} new movies")
-
-        # Now fetch details for all new movies in batches
-        movie_batch_size = 10  # Process movies in smaller batches
-        for i in range(0, len(all_new_movie_urls), movie_batch_size):
-            batch_urls = all_new_movie_urls[i:i + movie_batch_size]
-            print(f"Fetching details for movies {i + 1}-{i + len(batch_urls)} of {len(all_new_movie_urls)}")
-
-            # Fetch details for this batch
-            new_movies = await self.fetch_movie_details(batch_urls)
-            await Movie.save(new_movies)
-            total_new_movies += len(new_movies)
-
-        return total_new_movies
+    # Run the
+    asyncio.run(run())

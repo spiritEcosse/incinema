@@ -1,3 +1,4 @@
+import asyncio
 import re
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -34,10 +35,109 @@ class Title(DataClassJSONSerializer):
     ru: str = ""
 
 
+# Add this new method to the MixinDynamoTable class
 class MixinDynamoTable:
     @classmethod
     def table(cls):
         return cls.__name__.lower()
+
+    @classmethod
+    async def get_by_id(cls, id_value):
+        """
+        Get an item from the DynamoDB table by its ID.
+
+        Parameters:
+        -----------
+        id_value : str
+            The ID value to search for
+
+        Returns:
+        --------
+        dict or None
+            The item if found, None otherwise
+        """
+        table_name = cls.table()
+        session = aioboto3.Session()
+
+        async with session.resource('dynamodb') as dynamo_resource:
+            table = await dynamo_resource.Table(table_name)
+
+            # Get the item by ID
+            response = await table.get_item(
+                Key={'id': id_value}
+            )
+
+            # Return the item if it exists
+            data = response.get('Item')
+            print(f"Item found: {data}")
+            return data
+
+    @classmethod
+    async def get_dynamo_count(cls, index_name=None, filter_expression=None):
+        """
+        Get the count of items in a DynamoDB table.
+
+        Parameters:
+        -----------
+        index_name : str, optional
+            The name of a global secondary index to use
+        filter_expression : boto3.dynamodb.conditions.ConditionBase, optional
+            Filter expression to apply
+
+        Returns:
+        --------
+        int
+            The count of items in the table
+        """
+        table_name = cls.table()
+        session = aioboto3.Session()
+
+        async with session.resource('dynamodb') as dynamo_resource:
+            # Get the table
+            table = await dynamo_resource.Table(table_name)
+
+            # Parameters for the scan operation
+            scan_params = {
+                'Select': 'COUNT'
+            }
+
+            # Add index_name if provided
+            if index_name:
+                scan_params['IndexName'] = index_name
+
+            # Add filter_expression if provided
+            if filter_expression:
+                scan_params['FilterExpression'] = filter_expression
+
+            # Get total count with pagination
+            total_count = 0
+            last_evaluated_key = None
+
+            print(f"Counting items in table '{table_name}'...")
+
+            # Continue scanning until all items have been counted
+            while True:
+                # Include the ExclusiveStartKey if we're continuing from a previous scan
+                if last_evaluated_key:
+                    scan_params['ExclusiveStartKey'] = last_evaluated_key
+
+                # Perform the scan
+                response = await table.scan(**scan_params)
+
+                # Add the count from this page
+                total_count += response['Count']
+
+                # Get the key for the next page, if any
+                last_evaluated_key = response.get('LastEvaluatedKey')
+
+                # If there's no more data, break
+                if not last_evaluated_key:
+                    break
+
+                print(f"Counted {total_count} items so far...")
+
+            print(f"Total count: {total_count} items")
+            return total_count
 
     @classmethod
     async def save(cls, items: List):
@@ -50,41 +150,98 @@ class MixinDynamoTable:
                     await batch.put_item(Item=item.to_dict())
 
     @classmethod
-    async def get_existing_ids(cls) -> Set[str]:
-        """Get all existing IDs from the DynamoDB table"""
-        existing_ids = set()
+    async def scan_all(cls):
+        """
+        Scan all items from the DynamoDB table
+
+        Returns:
+        --------
+        List
+            List of all items as model objects
+        """
+        table_name = cls.table()
         session = aioboto3.Session()
+        results = []
 
         async with session.resource('dynamodb') as dynamo_resource:
-            table = await dynamo_resource.Table(cls.table())
+            table = await dynamo_resource.Table(table_name)
 
-            # Scan the table to get all IDs
-            response = await table.scan(ProjectionExpression="id")
-            for item in response.get('Items', []):
-                existing_ids.add(item['id'])
+            # Scan with pagination
+            last_evaluated_key = None
 
-            # Handle pagination for large tables
-            while 'LastEvaluatedKey' in response:
-                response = await table.scan(
-                    ProjectionExpression="id",
-                    ExclusiveStartKey=response['LastEvaluatedKey']
-                )
-                for item in response.get('Items', []):
-                    existing_ids.add(item['id'])
+            while True:
+                scan_kwargs = {}
+                if last_evaluated_key:
+                    scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
 
-        return existing_ids
+                response = await table.scan(**scan_kwargs)
+                items = response.get('Items', [])
+
+                # Convert items to objects
+                for item in items:
+                    obj = cls.from_dict(item)
+                    results.append(obj)
+
+                last_evaluated_key = response.get('LastEvaluatedKey')
+                if not last_evaluated_key:
+                    break
+
+            return results
+
+    @classmethod
+    async def get_existing_ids(cls) -> Set[str]:
+        """
+        Get all existing IDs from the DynamoDB table
+
+        Returns:
+        --------
+        Set[str]
+            Set of all existing IDs
+        """
+        table_name = cls.table()
+        session = aioboto3.Session()
+        ids = set()
+
+        async with session.resource('dynamodb') as dynamo_resource:
+            table = await dynamo_resource.Table(table_name)
+
+            # Use ProjectionExpression to only get the ID field
+            scan_kwargs = {
+                'ProjectionExpression': 'id'
+            }
+
+            # Scan with pagination
+            last_evaluated_key = None
+
+            while True:
+                if last_evaluated_key:
+                    scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+
+                response = await table.scan(**scan_kwargs)
+                items = response.get('Items', [])
+
+                # Extract IDs
+                for item in items:
+                    ids.add(item.get('id'))
+
+                last_evaluated_key = response.get('LastEvaluatedKey')
+                if not last_evaluated_key:
+                    break
+
+            return ids
 
 
 @dataclass
 class Movie(MixinDynamoTable, DataClassJSONSerializer):
     id: str
     title: Title
-    year: str
     genres: List[str]
     popularity: int
     rating: Decimal
     runtime: Decimal
     votes: int
+    production_status: Optional[str] = ""
+    year: Optional[str] = ""
     audience: Optional[str] = ""
     overview: Optional[str] = ""
     directors: List[str] = field(default_factory=list)
@@ -174,3 +331,11 @@ class Item(MixinDynamoTable, DataClassJSONSerializer):
                     "Keys": ids,
                 }
             })
+
+
+# Run the example
+if __name__ == "__main__":
+    from settings import HOST_API_URL
+
+    print(HOST_API_URL)
+    asyncio.run(Movie.get_by_id("tt31806037"))

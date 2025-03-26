@@ -36,7 +36,7 @@ class HttpClient(DataClassJSONSerializer):
     headers: dict = field(default_factory=dict)
     token: Optional[str] = ""
     sleep: bool = False
-    json: bool = False
+    json: bool = True
 
     @property
     def server_name(self) -> str:

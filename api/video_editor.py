@@ -44,7 +44,8 @@ class VideoEditor:
 
     async def download(self):
         if not os.path.isfile(self.original) or self.re_download:
-            command = f"yt-dlp --geo-bypass --merge-output-format mp4 --cookies-from-browser 'vivaldi' -o '{self.original}' '{self.item.video.url}'"
+            # command = f"yt-dlp --geo-bypass --merge-output-format mp4 --cookies-from-browser 'vivaldi' -o '{self.original}' '{self.item.video.url}'"
+            command = f"yt-dlp --geo-bypass --merge-output-format mp4 -o '{self.original}' '{self.item.video.url}'"
             try:
                 subprocess.check_output(command, shell=True)
                 print(f"download : {self.original} from {self.item.video.url}")
